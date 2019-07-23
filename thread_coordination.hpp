@@ -58,7 +58,7 @@ namespace thread_tm {
 //                                  }, iip1, ...)
 
 
-//                 // The MainThread waits for all others to finish
+//                 // The main_thread waits for all others to finish
 //             }, ip1, ... , ipn)
 //     }
 // }
@@ -107,9 +107,9 @@ static std::atomic_size_t        wait_start;
 
 // MAIN THREAD CLASS ***********************************************************
 template <bool timed>
-struct MainThread
+struct main_thread
 {
-    MainThread(size_t p, size_t id) : p(p), id(id), _stage(0) { }
+    main_thread(size_t p, size_t id) : p(p), id(id), _stage(0) { }
 
     template<typename Functor, typename ... Types>
     inline std::pair<typename std::result_of<Functor(Types&& ...)>::type,
@@ -163,16 +163,16 @@ private:
     }
 };
 
-using   TimedMainThread = MainThread<true>;
-using UnTimedMainThread = MainThread<false>;
+using   timed_main_thread = main_thread<true>;
+using untimed_main_thread = main_thread<false>;
 
 
 
 // SUB THREAD CLASS ************************************************************
 template <bool timed>
-struct SubThread
+struct sub_thread
 {
-    SubThread(size_t p, size_t id) : p(p), id(id), _stage(0)
+    sub_thread(size_t p, size_t id) : p(p), id(id), _stage(0)
     {
         out.disable();
     }
@@ -221,7 +221,7 @@ private:
         if constexpr (timed)
         {
             result = std::chrono::duration_cast<std::chrono::nanoseconds>
-                (std::chrono::high_resolution_clock::now() - start_time).count();
+               (std::chrono::high_resolution_clock::now() - start_time).count();
         }
 
         return result;
@@ -229,8 +229,8 @@ private:
 };
 
 //time is measured relative to the global start
-using     TimedSubThread = SubThread<true>;
-using   UnTimedSubThread = SubThread<false>;
+using     timed_sub_thread = sub_thread<true>;
+using   untimed_sub_thread = sub_thread<false>;
 
 
 // START TEST ******************************************************************
@@ -244,13 +244,13 @@ inline int start_threads(size_t p, Types&& ... param)
 
     for (size_t i = 0; i < p-1; ++i)
     {
-        local_thread[i] = std::thread(Functor<UnTimedSubThread>::execute,
-                                      UnTimedSubThread(p, i+1),
+        local_thread[i] = std::thread(Functor<untimed_sub_thread>::execute,
+                                      untimed_sub_thread(p, i+1),
                                       std::ref(std::forward<Types>(param))...);
     }
 
     // int temp =0;
-    int temp = Functor<TimedMainThread>::execute(TimedMainThread(p, 0),
+    int temp = Functor<timed_main_thread>::execute(timed_main_thread(p, 0),
                                                  std::forward<Types>(param)...);
 
     // CLEANUP THREADS
