@@ -20,48 +20,48 @@
 
 namespace utils_tm {
 
-class CommandLine
+class command_line_parser
 {
 public:
-    CommandLine(int argn, char** argc)
+    command_line_parser(int argn, char** argc)
     {
         std::setlocale(LC_ALL, "en_US.UTF-8");
         for (size_t i = 0; i < size_t(argn); ++i)
         {
-            params.emplace_back(argc[i]);
-            flags .push_back   (ParamCodes::unused);
+            _param_vec.emplace_back(argc[i]);
+            _flag_vec .push_back   (usage_flags::unused);
         }
     }
 
-    std::string strArg(const std::string& name, const std::string def = "")
+    std::string str_arg(const std::string& name, const std::string def = "")
     {
-        auto ind = findName(name);
-        if (ind+1 < params.size())
+        auto ind = find_name(name);
+        if (ind+1 < _param_vec.size())
         {
-            flags[ind+1] = ParamCodes::used;
-            return params[ind+1];
+            _flag_vec[ind+1] = usage_flags::used;
+            return _param_vec[ind+1];
         }
-        else if (ind < params.size())
+        else if (ind < _param_vec.size())
         {
-            flags[ind] = ParamCodes::error;
+            _flag_vec[ind] = usage_flags::error;
             std::cout << "found argument \"" << name << "\" without following integer!"
                       << std::endl;
         }
         return def;
     }
 
-    int intArg(const std::string& name, int def = 0)
+    int int_arg(const std::string& name, int def = 0)
     {
-        auto ind = findName(name);
-        if (ind+1 < params.size())
+        auto ind = find_name(name);
+        if (ind+1 < _param_vec.size())
         {
-            flags[ind+1] = ParamCodes::used;
+            _flag_vec[ind+1] = usage_flags::used;
             int  r = 0;
             try
-            {   r = std::stoi(params[ind+1]);   }
+            {   r = std::stoi(_param_vec[ind+1]);   }
             catch (std::invalid_argument& e)
             {
-                flags[ind+1] = ParamCodes::error;
+                _flag_vec[ind+1] = usage_flags::error;
                 r = def;
                 std::cout << "error reading int argument \"" << name
                           << "\" from console, got \"invalid_argument exception\""
@@ -69,9 +69,9 @@ public:
             }
             return r;
         }
-        else if (ind < params.size())
+        else if (ind < _param_vec.size())
         {
-            flags[ind] = ParamCodes::error;
+            _flag_vec[ind] = usage_flags::error;
             std::cout << "found argument \"" << name << "\" without following integer!"
                       << std::endl;
         }
@@ -79,19 +79,19 @@ public:
 
     }
 
-    double doubleArg(const std::string& name, double def = 0.)
+    double double_arg(const std::string& name, double def = 0.)
     {
         std::setlocale(LC_ALL, "en_US.UTF-8");
-        auto ind = findName(name);
-        if (ind+1 < params.size())
+        auto ind = find_name(name);
+        if (ind+1 < _param_vec.size())
         {
-            flags[ind+1] = ParamCodes::used;
+            _flag_vec[ind+1] = usage_flags::used;
             double  r = 0;
             try
-            {   r = std::stod(params[ind+1]);   }
+            {   r = std::stod(_param_vec[ind+1]);   }
             catch (std::invalid_argument& e)
             {
-                flags[ind+1] = ParamCodes::error;
+                _flag_vec[ind+1] = usage_flags::error;
                 r = def;
                 std::cout << "error reading double argument \"" << name
                           << "\" from console, got \"invalid-argument exception\"!"
@@ -99,36 +99,36 @@ public:
             }
             return r;
         }
-        else if (ind < params.size())
+        else if (ind < _param_vec.size())
         {
-            flags[ind] = ParamCodes::error;
+            _flag_vec[ind] = usage_flags::error;
             std::cout << "found argument \"" << name << "\" without following double!"
                       << std::endl;
         }
         return def;
     }
 
-    bool boolArg(const std::string& name)
+    bool bool_arg(const std::string& name)
     {
-        return (findName(name)) < params.size();
+        return (find_name(name)) < _param_vec.size();
     }
 
     bool report()
     {
         bool un = true;
-        for (size_t i = 1; i < params.size(); ++i)
+        for (size_t i = 1; i < _param_vec.size(); ++i)
         {
-            if (flags[i] != ParamCodes::used)
+            if (_flag_vec[i] != usage_flags::used)
             {
-                if (flags[i] == ParamCodes::unused)
+                if (_flag_vec[i] == usage_flags::unused)
                 {
-                    std::cout << "parameter " << i << " = \"" << params[i]
+                    std::cout << "parameter " << i << " = \"" << _param_vec[i]
                               << "\" was unused!" << std::endl;
                 }
-                else if ( flags[i] == ParamCodes::error)
+                else if (_flag_vec[i] == usage_flags::error)
                 {
                     std::cout << "error reading parameter " << i
-                              << " = \"" << params[i] << "\"" << std::endl;
+                              << " = \"" << _param_vec[i] << "\"" << std::endl;
                 }
                 un = false;
             }
@@ -137,27 +137,27 @@ public:
     }
 
 private:
-    enum class ParamCodes
+    enum class usage_flags
     {
         unused,
         used,
         error
     };
 
-    std::vector<std::string> params;
-    std::vector<ParamCodes>  flags;
+    std::vector<std::string> _param_vec;
+    std::vector<usage_flags>  _flag_vec;
 
-    size_t findName(const std::string& name)
+    size_t find_name(const std::string& name)
     {
-        for (size_t i = 0; i < params.size(); ++i)
+        for (size_t i = 0; i < _param_vec.size(); ++i)
         {
-            if (params[i] == name)
+            if (_param_vec[i] == name)
             {
-                flags[i] = ParamCodes::used;
+                _flag_vec[i] = usage_flags::used;
                 return i;
             }
         }
-        return params.size();
+        return _param_vec.size();
     }
 
 };
