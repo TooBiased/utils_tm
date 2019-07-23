@@ -4,15 +4,14 @@
 #include <cstdint>
 
 
-namespace dysect {
-namespace hash {
+namespace utils_tm {
+namespace hash_tm  {
 
 struct murmur2_hash
 {
     murmur2_hash(size_t s = 1203989050u) : seed(s) { }
 
     static constexpr size_t significant_digits = 64;
-    //const
     size_t seed;
 
     inline uint64_t MurmurHash64A ( const void * key, int len, unsigned int seed ) const

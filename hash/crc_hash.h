@@ -4,8 +4,8 @@
 #include <cstdint>
 
 
-namespace dysect {
-namespace hash {
+namespace utils_tm {
+namespace hash_tm  {
 
 struct crc_hash
 {
