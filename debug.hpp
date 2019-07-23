@@ -25,7 +25,7 @@
 #include <string>
 #include <iostream>
 
-#include "output.h"
+#include "output.hpp"
 
 namespace utils_tm{
 namespace debug_tm{

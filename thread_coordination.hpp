@@ -22,7 +22,7 @@
 #include <thread>
 #include <type_traits>
 
-#include "output.h"
+#include "output.hpp"
 
 namespace utils_tm {
 namespace thread_tm {
