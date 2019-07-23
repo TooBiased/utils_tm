@@ -153,7 +153,7 @@ inline output_type& operator<<(output_type& cons, color c)
 
 // controls the width of the output
 class width { public: int _w; width(int w) : _w(w) { } };
-inline output_type& operator<<(output_type& cons, w w)
+inline output_type& operator<<(output_type& cons, width w)
 {
     cons.output->width(w._w);
     return cons;
