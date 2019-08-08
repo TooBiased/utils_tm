@@ -22,7 +22,7 @@
         defined(MURMUR2) || \
         defined(MURMUR3) || \
         defined(XXHASH)) )
-#define XXHASH
+#define MURMUR2
 #endif // NO HASH DEFINED
 
 #ifdef CRC
