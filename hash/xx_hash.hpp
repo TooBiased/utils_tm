@@ -1,5 +1,7 @@
 #pragma once
 
+#include <string_view>
+
 // this define ensures, that xxhash is inlined/does not create new compile unit
 #define XXH_PRIVATE_API
 #include "xxhash.h"
@@ -10,9 +12,12 @@ namespace hash_tm  {
 
 struct xx_hash
 {
+    static constexpr std::string_view name = "xxhash";
+    static constexpr size_t significant_digits = 64;
+
+
     xx_hash(size_t s = 13358259232739045019ull) : seed(s) { }
 
-    static constexpr size_t significant_digits = 64;
     size_t seed;
 
     inline uint64_t operator()(const uint64_t k) const

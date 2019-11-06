@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <string_view>
 
 
 namespace utils_tm {
@@ -9,9 +10,12 @@ namespace hash_tm  {
 
 struct murmur2_hash
 {
+    static constexpr std::string_view   name = "murmur2";
+    static constexpr size_t significant_digits = 64;
+
+
     murmur2_hash(size_t s = 1203989050u) : seed(s) { }
 
-    static constexpr size_t significant_digits = 64;
     size_t seed;
 
     inline uint64_t MurmurHash64A ( const void * key, int len, unsigned int seed ) const
