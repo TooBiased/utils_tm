@@ -1,5 +1,21 @@
 * Tasks
 
+** TODO implement an automatic chooser for elements that have or do not have a lockless implementation
+   [2019-12-20 Fri 18:03]
+   [[file:~/IMP/utils/data_structures/many_producer_single_consumer_bucket.hpp::std::pair<std::atomic<T>*,%20std::atomic<T>*>%20pull_all()]]
+
+** TODO implement a special iterator that automatically waits for the element to be inserted
+   [2019-12-20 Fri 18:02]
+   [[file:~/IMP/utils/data_structures/many_producer_single_consumer_bucket.hpp::std::pair<std::atomic<T>*,%20std::atomic<T>*>%20pull_all()]]
+
+** TODO use an allocator for both buffers
+   [2019-12-20 Fri 18:01]
+   [[file:~/IMP/utils/data_structures/many_producer_single_consumer_bucket.hpp::class%20many_producer_single_consumer_buffer]]
+
+** TODO finish writing the test
+   [2019-12-20 Fri 17:59]
+   [[file:~/IMP/utils/tests/src/test_circular_buffer.cpp::{]]
+
 ** TODO use an allocator to allocate the buffer
    [2019-12-20 Fri 17:52]
    [[file:~/IMP/utils/data_structures/circular_buffer.hpp::_buffer%20=%20new%20T%5Btcap%5D;]]
