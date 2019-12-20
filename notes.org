@@ -1,0 +1,5 @@
+* Tasks
+
+** TODO use an allocator to allocate the buffer
+   [2019-12-20 Fri 17:52]
+   [[file:~/IMP/utils/data_structures/circular_buffer.hpp::_buffer%20=%20new%20T%5Btcap%5D;]]
