@@ -1,5 +1,8 @@
 #pragma once
 
+
+#include <string_view>
+
 // We include the cpp to avoid generating another compile unit
 #include "MurmurHash3.cpp"
 
@@ -7,11 +10,15 @@
 namespace utils_tm {
 namespace hash_tm  {
 
+
 struct murmur3_hash
 {
+    static constexpr std::string_view name = "murmur3";
+    static constexpr size_t significant_digits = 64;
+
+
     murmur3_hash(size_t s = 1203989050u) : seed(s) { }
 
-    static constexpr size_t significant_digits = 64;
     uint seed;
 
     inline uint64_t operator()(const uint64_t k) const

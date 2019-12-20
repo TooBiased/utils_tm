@@ -26,7 +26,7 @@
 #endif // NO HASH DEFINED
 
 #ifdef CRC
-#include "hash/crc_hash.h"
+#include "hash/crc_hash.hpp"
 #define HASHFCT utils_tm::hash_tm::crc_hash
 namespace utils_tm {
 namespace hash_tm {
@@ -37,7 +37,7 @@ namespace hash_tm {
 
 
 #ifdef MURMUR2
-#include "hash/murmur2_hash.h"
+#include "hash/murmur2_hash.hpp"
 #define HASHFCT utils_tm::hash_tm::murmur2_hash
 namespace utils_tm {
 namespace hash_tm {
@@ -48,7 +48,7 @@ namespace hash_tm {
 
 
 #ifdef MURMUR3
-#include "hash/murmur3_hash.h"
+#include "hash/murmur3_hash.hpp"
 #define HASHFCT utils_tm::hash_tm::murmur3_hash
 namespace utils_tm {
 namespace hash_tm {
@@ -60,7 +60,7 @@ namespace hash_tm {
 
 
 #ifdef XXHASH
-#include "hash/xx_hash.h"
+#include "hash/xx_hash.hpp"
 #define HASHFCT utils_tm::hash_tm::xx_hash
 namespace utils_tm {
 namespace hash_tm {

@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <string_view>
 
 
 namespace utils_tm {
@@ -9,11 +10,14 @@ namespace hash_tm  {
 
 struct crc_hash
 {
+    static constexpr std::string_view name = "crc32";
+    static constexpr size_t significant_digits = 64;
+
+
     crc_hash(size_t seed = 12923598712359872066ull)
         : seed0(seed), seed1(seed*7467732452331123588ull)
     { }
 
-    static const size_t significant_digits = 64;
     size_t seed0;
     size_t seed1;
 
