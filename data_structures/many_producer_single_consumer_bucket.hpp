@@ -1,4 +1,5 @@
 #include <atomic>
+#include <optional>
 #include <algorithm>
 #include <cstddef>
 
@@ -11,37 +12,37 @@ class many_producer_single_consumer_buffer
 private:
     using this_type = many_producer_single_consumer_buffer<T>;
 
-    bool                         _first;
+    static constexpr size_t      _scnd_buffer_flag = 1ull<<63;
     size_t                       _capacity;
-    std::atomic<std::atomic<T>*> _pos;
-    T*                           _buffer[2];
+    std::atomic_size_t           _pos;
+    size_t                       _read_pos;
+    size_t                       _read_end;
+    std::atomic<T>*              _buffer;
 
 public:
     using value_type = T;
 
-    many_producer_single_consumer_buffer(size_t capacity) : _first(true), _capacity(capacity)
+    many_producer_single_consumer_buffer(size_t capacity)
+        : _capacity(capacity), _pos(0), _read_pos(0), _read_end(0)
     {
-        _buffer[0] = new T[capacity];
-        _buffer[1] = new T[capacity];
-        if (_buffer[0] > _buffer[1]) std::swap(_buffer[0], _buffer[1]);
+        _buffer = new std::atomic<T>[2*capacity];
 
-        std::fill(_buffer[0], _buffer[0] + capacity, T());
-        std::fill(_buffer[1], _buffer[1] + capacity, T());
-
-        _pos.store(_buffer[0]);
+        for (size_t i = 0; i < 2*capacity; ++i)
+        {
+            _buffer[i].store(T());
+        }
     }
 
     many_producer_single_consumer_buffer(const many_producer_single_consumer_buffer&) = delete;
     many_producer_single_consumer_buffer& operator=(const many_producer_single_consumer_buffer&) = delete;
     many_producer_single_consumer_buffer(many_producer_single_consumer_buffer&& other)
-        : _first(other.first),
-          _capacity(other._capacity),
-          _pos(other._pos.load())
+        : _capacity(other._capacity),
+          _pos(other._pos.load()),
+          _read_pos(other._read_pos),
+          _read_end(other._read_end)
     {
-        _buffer[0] = other._buffer[0];
-        _buffer[1] = other._buffer[1];
-        other._buffer[0] = nullptr;
-        other._buffer[1] = nullptr;
+        _buffer       = other._buffer;
+        other._buffer = nullptr;
     }
     many_producer_single_consumer_buffer& operator=(many_producer_single_consumer_buffer&& rhs)
     {
@@ -53,8 +54,7 @@ public:
     }
     ~many_producer_single_consumer_buffer()
     {
-        delete[] _buffer[0];
-        delete[] _buffer[1];
+        delete[] _buffer;
     }
 
 
@@ -63,23 +63,51 @@ public:
     bool push_back(const T& e)
     {
         auto tpos = _pos.fetch_add(1);
-        if (tpos >= _capacity) return false;
+
+        if (tpos & _scnd_buffer_flag)
+        {
+            tpos ^= _scnd_buffer_flag;
+            if (tpos > _capacity*2)
+                return false;
+        }
+        else if (tpos > _capacity) return false;
 
         tpos->store(e);
+        return true;
     }
 
     // can be called concurrent to push_backs but only by the owning thread
     // pull_all breaks all previously pulled elements
-    std::pair<std::atomic<T>*, std::atomic<T>*> pull_all()
+    std::optional<T> pop()
     {
-        auto current_buffer = _buffer[(_first) ? 0 : 1];
-        auto next_buffer    = _buffer[(_first) ? 1 : 0];
-        std::fill(next_buffer, next_buffer+_capacity, T());
+        if (_read_pos == _read_end)
+        {
+            fetch_on_empty_read_buffer();
+            if (_read_pos == _read_end) return {};
+        }
+        auto read = _buffer[_read_pos].load();
+        while (read == T()) read = _buffer[_read_pos].load();
+        _buffer[_read_pos].store(T());
+        return std::make_optional(read);
+    }
 
-        auto end = _pos.exchange(next_buffer);
-        end = std::min(end, current_buffer+_capacity);
+private:
+    void fetch_on_empty_read_buffer()
+    {
+        bool first_to_second = ! (_scnd_buffer_flag & _pos.load());
+        if (first_to_second)
+        {
+            _read_end  = _pos.exchange(_capacity | _scnd_buffer_flag);
+            _read_end  = std::min(_read_end, _capacity);
+            _read_pos  = 0;
+        }
+        else
+        {
+            _read_end  = _pos.exchange(0);
+            _read_end ^= _scnd_buffer_flag;
+            _read_end  = std::min(_read_end, 2*_capacity);
+            _read_pos  = _capacity;
+        }
 
-        _first = !_first;
-        return std::make_pair(current_buffer, end);
     }
 };

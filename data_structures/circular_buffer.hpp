@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <optional>
 #include <cstddef>
 
 
@@ -33,8 +34,12 @@ public:
     template<class ...Args>
     inline void emplace_front(Args&& ... args);
 
-    inline std::pair<T, bool> pop_back();
-    inline std::pair<T, bool> pop_front();
+    inline std::optional<T> pop_back();
+    inline std::optional<T> pop_front();
+
+
+    size_t size()     const;
+    size_t capacity() const;
 
     template <bool is_const>
     class iterator_base
@@ -180,36 +185,43 @@ void circular_buffer<T>::emplace_front(Args&& ... args)
 }
 
 template <class T>
-std::pair<T, bool> circular_buffer<T>::pop_back()
+std::optional<T> circular_buffer<T>::pop_back()
 {
-    _end = dec(_end);
-
     if (_start == _end)
-    {
-        _end = inc(_end);
-        return std::make_pair(T(), false);
-    }
+    { return {}; }
 
-    auto result = std::move(_buffer[_end]);
+    _end = dec(_end);
+    auto result = std::make_optional(std::move(_buffer[_end]));
     _buffer[_end].~T();
-    return std::make_pair(result, true);
+    return result;
 }
 
 template <class T>
-std::pair<T, bool> circular_buffer<T>::pop_front()
+std::optional<T> circular_buffer<T>::pop_front()
 {
-    if (inc(_start) == _end)
-    {
-        return std::make_pair(T(), false);
-    }
+    if (_start == _end)
+    { return {}; }
 
-    auto result = std::move(_buffer[_start]);
+    auto result = std::make_optional(std::move(_buffer[_start]));
     _buffer[_start].~T();
     _start = inc(_start);
-    return std::make_pair(result, true);
+    return result;
 }
 
 
+// SIZE AND CAPACITY !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+template <class T>
+size_t circular_buffer<T>::size() const
+{
+    if (_start > _end) return _end + _bitmask + 1 - _start;
+    return _end - _start;
+}
+
+template <class T>
+size_t circular_buffer<T>::capacity() const
+{
+    return _bitmask+1;
+}
 
 
 // HELPER FUNCTIONS !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
