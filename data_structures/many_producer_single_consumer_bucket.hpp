@@ -72,9 +72,34 @@ public:
         }
         else if (tpos > _capacity) return false;
 
-        tpos->store(e);
+        _buffer[tpos]->store(e);
         return true;
     }
+
+    template <class iterator_type>
+    size_t push_back(iterator_type& start, const iterator_type& end, size_t number = 0)
+    {
+        if (number == 0) number = end-start;
+        size_t tpos   = _pos.fetch_add(number);
+        size_t endpos = 0;
+        if (tpos & _scnd_buffer_flag)
+        {
+            tpos  ^= _scnd_buffer_flag;
+            endpos = std::min(tpos + number, _capacity*2);
+        }
+        else
+            number = std::min(tpos + number, _capacity);
+
+        number = end - tpos;
+
+        for (; tpos < endpos; ++tpos)
+        {
+            _buffer[tpos]->store(*start);
+            start++;
+        }
+        return number;
+    }
+
 
     // can be called concurrent to push_backs but only by the owning thread
     // pull_all breaks all previously pulled elements
