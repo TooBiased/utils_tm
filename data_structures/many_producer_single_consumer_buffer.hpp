@@ -49,7 +49,7 @@ public:
         if (&rhs == this) return *this;
 
         this->~this_type();
-        new (this) many_producer_single_consumer_buffer(rhs);
+        new (this) many_producer_single_consumer_buffer(std::move(rhs));
         return *this;
     }
     ~many_producer_single_consumer_buffer()
@@ -67,12 +67,12 @@ public:
         if (tpos & _scnd_buffer_flag)
         {
             tpos ^= _scnd_buffer_flag;
-            if (tpos > _capacity*2)
+            if (tpos >= _capacity*2)
                 return false;
         }
-        else if (tpos > _capacity) return false;
+        else if (tpos >= _capacity) return false;
 
-        _buffer[tpos]->store(e);
+        _buffer[tpos].store(e);
         return true;
     }
 
@@ -80,6 +80,7 @@ public:
     size_t push_back(iterator_type& start, const iterator_type& end, size_t number = 0)
     {
         if (number == 0) number = end-start;
+
         size_t tpos   = _pos.fetch_add(number);
         size_t endpos = 0;
         if (tpos & _scnd_buffer_flag)
@@ -88,9 +89,9 @@ public:
             endpos = std::min(tpos + number, _capacity*2);
         }
         else
-            number = std::min(tpos + number, _capacity);
+            endpos = std::min(tpos + number, _capacity);
 
-        number = end - tpos;
+        number = endpos - tpos;
 
         for (; tpos < endpos; ++tpos)
         {
@@ -99,7 +100,6 @@ public:
         }
         return number;
     }
-
 
     // can be called concurrent to push_backs but only by the owning thread
     // pull_all breaks all previously pulled elements
@@ -113,6 +113,7 @@ public:
         auto read = _buffer[_read_pos].load();
         while (read == T()) read = _buffer[_read_pos].load();
         _buffer[_read_pos].store(T());
+        ++_read_pos;
         return std::make_optional(read);
     }
 
