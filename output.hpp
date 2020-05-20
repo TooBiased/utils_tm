@@ -27,24 +27,24 @@
 namespace utils_tm {
 namespace out_tm {
 
+
+using manipulator_type = std::ostream& (*) (std::ostream &);
+
 // DEFINES THE OUTPUT TYPE THE *************************************************
 // DEVICE CAN BE CHANGED FROM TERMINAL TO FILE AND BACK ************************
 class output_type
 {
 public:
-    std::ostream* output;
-
-public:
-    output_type () : is_fstream(0)
+    output_type () : _is_fstream(0)
     {
-        output = &(std::cout);
+        _outstream = &(std::cout);
     }
 
     void set_terminal()
     {
         cleanup();
-        is_fstream = false;
-        output = &(std::cout);
+        _is_fstream = false;
+        _outstream  = &(std::cout);
     }
 
     void set_file(std::string& name)
@@ -60,8 +60,8 @@ public:
             return;
         }
 
-        is_fstream = true;
-        output     = fout;
+        _is_fstream = true;
+        _outstream  = fout;
     }
 
     void disable()
@@ -73,26 +73,48 @@ public:
             std::cerr << "disabled stream is open" << std::endl;
         }
 
-        is_fstream = true;
-        output     = fout;
+        _is_fstream = true;
+        _outstream  = fout;
     }
+
 
     template<class T>
     friend output_type& operator<<(output_type& out, T&& t);
+    friend output_type& operator<<(output_type& out, manipulator_type t);
 
 private:
-    bool is_fstream;
+    std::ostream* _outstream;
+    bool          _is_fstream;
 
     void cleanup()
     {
-        if (is_fstream)
+        if (_is_fstream)
         {
-            std::ofstream* fout = static_cast<std::ofstream*>(output);
+            std::ofstream* fout = static_cast<std::ofstream*>(_outstream);
             if (fout->is_open()) fout->close();
             delete fout;
         }
     }
 };
+
+
+
+// base case, everything is output through the device
+template<typename T>
+inline output_type& operator<<(output_type& cons, T&& t)
+{
+    *(cons._outstream) << std::forward<T>(t);
+    return cons;
+}
+
+// necessary for endl and flush
+// using omanip_t = std::ostream& (*) (std::ostream &);
+inline output_type& operator<<(output_type& cons, manipulator_type t)
+{
+    *(cons._outstream) << t;
+    return cons;
+}
+
 
 // THE STATIC OUTPUT OBJECT (THIS REPLACES std::cout) **************************
 output_type& out()
@@ -102,6 +124,63 @@ output_type& out()
 }
 
 
+
+
+template <class Out>
+class locally_buffered_output
+{
+private:
+    using stream_type = Out;
+
+    stream_type&      _out;
+    std::stringstream _buffer;
+
+public:
+    locally_buffered_output(stream_type& out) : _out(out) { }
+    locally_buffered_output(const locally_buffered_output&) = delete;
+    locally_buffered_output& operator=(const locally_buffered_output&) = delete;
+    locally_buffered_output(locally_buffered_output&&) = default;
+    locally_buffered_output& operator=(locally_buffered_output&&) = default;
+    ~locally_buffered_output() { _out << _buffer.str() << std::flush; }
+
+    template <class O, class T>
+    friend locally_buffered_output<O>& operator <<(locally_buffered_output<O>& out, T&& t);
+    template <class O>
+    friend locally_buffered_output<O>& operator <<(locally_buffered_output<O>& out, manipulator_type t);
+};
+
+// base case, everything is output through the device
+template <class O, class T>
+inline locally_buffered_output<O>& operator<<(locally_buffered_output<O>& lbo,
+                                              T&& t)
+{
+    lbo._buffer << std::forward<T>(t);
+    return lbo;
+}
+
+// necessary for endl and flush
+// using omanip_t = std::ostream& (*) (std::ostream &);
+template <class O>
+inline locally_buffered_output<O>& operator<<(locally_buffered_output<O>& lbo,
+                                              manipulator_type t)
+{
+    lbo._buffer << t;
+    lbo._out << lbo._buffer.str() << std::flush;
+    lbo._buffer.str("");
+    return lbo;
+}
+
+
+locally_buffered_output<output_type>& buffered_out()
+{
+    static thread_local locally_buffered_output<output_type> local_out(out());
+    return local_out;
+}
+
+
+
+
+// CHANGING COLORS OF OUTPUTS **************************************************
 enum class color
 {
     reset    = 0,
@@ -123,42 +202,35 @@ enum class color
     bwhite   = 47
 };
 
-
-// DIFFERENT OVERLOADS OF THE << OPERATOR **************************************
-
-// base case, everything is output through the device
-template<typename T>
-inline output_type& operator<<(output_type& cons, T&& t)
-{
-    *(cons.output) << std::forward<T>(t);
-    return cons;
-}
-
-// necessary for endl and flush
-using omanip_t = std::ostream& (*) (std::ostream &);
-inline output_type& operator<<(output_type& cons, omanip_t t)
-{
-    *(cons.output) << t;
-    return cons;
-}
-
-// controls the color of the output
-inline output_type& operator<<(output_type& cons, color c)
+inline std::ostream& operator<<(std::ostream& o, color c)
 {
     int ccode = static_cast<int>(c);
-    if (ccode >= 40) *(cons.output) << "\033[1;" << ccode-10 << "m";
-    else             *(cons.output) << "\033[0;" << ccode    << "m";
-    return cons;
+    if (ccode >= 40) o << "\033[1;" << ccode-10 << "m";
+    else             o << "\033[0;" << ccode    << "m";
+    return o;
 }
 
-// controls the width of the output
-class width { public: int _w; width(int w) : _w(w) { } };
-inline output_type& operator<<(output_type& cons, width w)
+
+
+
+// CONTROLS THE WIDTH OF THE OUTPUT ********************************************
+class width
 {
-    cons.output->width(w._w);
-    return cons;
-}
+public:
+    width(size_t w) : _w(w) { }
+private:
+    size_t _w;
 
+    friend std::ostream& operator<<(std::ostream& o, width w);
+};
+
+inline std::ostream& operator<<(std::ostream& o, width w)
+{ o.width(w._w); return o; }
+
+
+
+
+// PRINT BITS STUFF ************************************************************
 template <class int_type>
 std::string bit_print (int_type t)
 {

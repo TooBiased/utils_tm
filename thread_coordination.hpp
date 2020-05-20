@@ -118,13 +118,13 @@ struct main_thread
     {
         start_stage(p-1, ++_stage);
         auto temp = std::forward<Functor>(f)(std::forward<Types>(param) ... );
-        return std::make_pair(std::move(temp), end_stage(p-1));
+        return std::make_pair(std::move(temp), end_stage(p-1, ++_stage));
     }
 
     inline void synchronize()
     {
         start_stage(p-1, ++_stage);
-        end_stage(p-1);
+        end_stage(p-1,   ++_stage);
     }
 
     size_t p;
@@ -149,7 +149,7 @@ private:
         level.store(lvl, std::memory_order_release);
     }
 
-    inline size_t end_stage(size_t p)
+    inline size_t end_stage(size_t p, size_t lvl)
     {
         while (wait_end.load(std::memory_order_acquire) < p);
         wait_end.store(0, std::memory_order_release);
@@ -159,6 +159,7 @@ private:
             result = std::chrono::duration_cast<std::chrono::nanoseconds>
                (std::chrono::high_resolution_clock::now() - start_time).count();
         }
+        level.store(lvl);
         return result;
     }
 };
@@ -185,13 +186,13 @@ struct sub_thread
         start_stage(++_stage);//wait_for_stage(stage);
         auto temp = std::forward<Functor>(f)(std::forward<Types>(param)...);
         //finished_stage();
-        return std::make_pair(temp, end_stage());
+        return std::make_pair(temp, end_stage(++_stage));
     }
 
     inline void synchronize()
     {
         start_stage(++_stage);
-        end_stage();
+        end_stage(++_stage);
     }
 
     size_t p;
@@ -206,14 +207,14 @@ private:
     inline void start_stage(size_t lvl)
     {
         wait_start.fetch_add(1, std::memory_order_acq_rel);
-        while (level.load(std::memory_order_acquire) < lvl);
+        while (level.load(std::memory_order_acquire) < lvl) { /* wait */ }
         if constexpr (timed)
         {
             start_time = std::chrono::high_resolution_clock::now();
         }
     }
 
-    inline size_t end_stage()
+    inline size_t end_stage(size_t lvl)
     {
         wait_end.fetch_add(1, std::memory_order_acq_rel);
 
@@ -223,6 +224,8 @@ private:
             result = std::chrono::duration_cast<std::chrono::nanoseconds>
                (std::chrono::high_resolution_clock::now() - start_time).count();
         }
+
+        while (level.load(std::memory_order_acquire) < lvl) { /* wait */ }
 
         return result;
     }

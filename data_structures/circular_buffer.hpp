@@ -20,7 +20,7 @@ private:
 public:
     using value_type = T;
 
-    circular_buffer(size_t capacity);
+    circular_buffer(size_t capacity = 128);
     circular_buffer(const circular_buffer&) = delete;
     circular_buffer& operator=(const circular_buffer&) = delete;
     circular_buffer(circular_buffer&& other);

@@ -44,3 +44,4 @@ endfunction( CompileTest )
 
 CompileTest( src/test_circular_buffer.cpp circular_buffer_test)
 CompileTest( src/test_many_producer_single_consumer_buffer.cpp many_producer_single_consumer_buffer_test)
+CompileTest( src/test_reclamation_strategies.cpp reclamation_test)
