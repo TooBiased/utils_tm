@@ -22,7 +22,7 @@ namespace reclamation_tm
         using pointer_type        = T*;
         using atomic_pointer_type = std::atomic<T*>;
 
-        delayed_manager();
+        delayed_manager() = default;
         delayed_manager(const delayed_manager&) = delete;
         delayed_manager& operator=(const delayed_manager&) = delete;
         delayed_manager(delayed_manager&& other) = default;
