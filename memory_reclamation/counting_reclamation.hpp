@@ -107,14 +107,15 @@ namespace reclamation_tm
     template <class T, template <class> class Q> template <class ...Args>
     T* counting_manager<T,Q>::handle_type::create_pointer(Args&& ... arg) const
     {
+        auto temp = nullptr;
         {   // area for the lock_guard
             std::lock_guard<std::mutex> guard(_parent._freelist_mutex);
-            auto temp = _parent._freelist.pop_front();
-            if (temp)
-            {
-                temp.value()->emplace(std::forward<Args>(arg)...);
-                return static_cast<T*>(temp.value());
-            }
+            temp = _parent._freelist.pop_front();
+        }
+        if (temp)
+        {
+            temp.value()->emplace(std::forward<Args>(arg)...);
+            return static_cast<T*>(temp.value());
         }
         return new internal_type(std::forward<Args>(arg)...);
     }
