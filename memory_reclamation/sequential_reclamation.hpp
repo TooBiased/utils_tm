@@ -5,7 +5,7 @@
 #include <vector>
 
 #include "../mark_pointer.hpp"
-#incluse "../output.hpp"
+#include "../output.hpp"
 
 namespace utils_tm
 {
@@ -66,7 +66,7 @@ namespace reclamation_tm
         using pointer_type        = T*;
         using atomic_pointer_type = std::atomic<T*>;
 
-        sequential_manager();
+        sequential_manager() = default;
         sequential_manager(const sequential_manager&) = delete;
         sequential_manager& operator=(const sequential_manager&) = delete;
         sequential_manager(sequential_manager&& other) = default;
