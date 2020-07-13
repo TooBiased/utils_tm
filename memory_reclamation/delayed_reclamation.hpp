@@ -89,7 +89,7 @@ namespace reclamation_tm
     template <class T>
     T* delayed_manager<T>::handle_type::protect(atomic_pointer_type& ptr) const
     {
-        return mark::clear(ptr.load());
+        return ptr.load();
     }
 
     template <class T>

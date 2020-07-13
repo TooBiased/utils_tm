@@ -218,17 +218,17 @@ namespace reclamation_tm
     T* hazard_manager<T,mt,mp>::handle_type::protect(atomic_pointer_type& ptr)
     {
         auto pos = _internal._counter.fetch_add(1);
-        auto temp0 = mark::clear(ptr.load());
-        _internal._ptr[pos].store(temp0);
-        auto temp1 = mark::clear(ptr.load());
+        auto temp0 = ptr.load();
+        _internal._ptr[pos].store(mark::clear(temp0));
+        auto temp1 = ptr.load();
         while (temp0 != temp1)
         {
-            temp0 = _internal._ptr[pos].exchange(temp1);
+            temp0 = _internal._ptr[pos].exchange(mark::clear(temp1));
             if (mark::get_mark<0>(temp0))
                 continue_deletion(mark::clear(temp0), pos);
 
             temp0 = temp1;
-            temp1 = mark::clear(ptr.load());
+            temp1 = ptr.load();
         }
         return temp0;
     }

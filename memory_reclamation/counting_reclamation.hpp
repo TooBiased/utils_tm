@@ -123,15 +123,15 @@ namespace reclamation_tm
     template <class T, template <class> class Q>
     T* counting_manager<T,Q>::handle_type::protect(atomic_pointer_type& ptr)
     {
-        auto temp  = mark::clear(ptr.load());
-        increment_counter(temp);
-        auto temp2 = mark::clear(ptr.load());
+        auto temp  = ptr.load();
+        increment_counter(mark::clear(temp));
+        auto temp2 = ptr.load();
         while (temp != temp2)
         {
-            decrement_counter(temp);
+            decrement_counter(mark::clear(temp));
             temp = temp2;
-            increment_counter(temp);
-            temp2 = mark::clear(ptr.load());
+            increment_counter(mark::clear(temp));
+            temp2 = ptr.load();
         }
         return temp;
     }
