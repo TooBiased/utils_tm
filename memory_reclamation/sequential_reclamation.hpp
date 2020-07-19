@@ -98,7 +98,8 @@ namespace reclamation_tm
             inline void safe_delete(pointer_type ptr) const;
 
             inline void protect_raw(pointer_type ptr) const;
-            inline void delete_raw(pointer_type ptr) const;
+            inline void delete_raw (pointer_type ptr) const;
+            inline bool is_safe    (pointer_type ptr) const;
 
             inline void unprotect(pointer_type ptr) const;
             inline void unprotect(std::vector<T*>& vec) const;
@@ -142,6 +143,12 @@ namespace reclamation_tm
     void sequential_manager<T>::handle_type::delete_raw(pointer_type ptr) const
     {
         delete ptr;
+    }
+
+    template <class T>
+    bool sequential_manager<T>::handle_type::is_safe(pointer_type) const
+    {
+        return false;
     }
 
 

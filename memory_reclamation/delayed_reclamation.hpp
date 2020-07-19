@@ -57,7 +57,8 @@ namespace reclamation_tm
             inline void safe_delete(pointer_type ptr);
 
             inline void protect_raw(pointer_type ptr) const;
-            inline void delete_raw(pointer_type ptr);
+            inline void delete_raw (pointer_type ptr);
+            inline void is_safe    (pointer_type ptr);
 
             inline void unprotect(pointer_type ptr) const;
             inline void unprotect(std::vector<T*>& vec) const;
@@ -111,6 +112,11 @@ namespace reclamation_tm
         delete ptr;
     }
 
+    template <class T>
+    bool delayed_manager<T>::handle_type::is_safe(pointer_type ptr)
+    {
+        return false;
+    }
 
     template <class T>
     void delayed_manager<T>::handle_type::unprotect(pointer_type) const

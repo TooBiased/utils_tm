@@ -73,6 +73,7 @@ namespace reclamation_tm
 
             inline void protect_raw(pointer_type ptr);
             inline void delete_raw(pointer_type ptr);
+            inline bool is_safe(pointer_type ptr);
 
             inline void unprotect(pointer_type ptr);
             inline void unprotect(std::vector<T*>& vec);
@@ -272,6 +273,22 @@ namespace reclamation_tm
         delete ptr;
     }
 
+    template <class T, size_t mt, size_t mp>
+    bool hazard_manager<T,mt,mp>::handle_type::is_safe(pointer_type ptr)
+    {
+        for (int j = _parent._handle_counter.load(); j >= 0; --j)
+        {
+            auto temp_handle = _parent.handles[j].load();
+            if (mark::get_mark<0>(temp_handle)) continue;
+            for (int i = temp_handle->_counter.load()-1; i>=0; --i)
+            {
+                auto temp = temp_handle->_ptr[i].load();
+                if (temp == ptr)
+                    return false;
+            }
+        }
+        return true;
+    }
 
     template <class T, size_t mt, size_t mp>
     void hazard_manager<T,mt,mp>::handle_type::unprotect(pointer_type ptr)

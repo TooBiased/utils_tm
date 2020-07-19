@@ -84,9 +84,11 @@ namespace reclamation_tm
 
             inline void protect_raw(pointer_type ptr) const;
             inline void delete_raw(pointer_type ptr);
+            inline bool is_safe(pointer_type ptr);
 
             inline void unprotect(pointer_type ptr);
             inline void unprotect(std::vector<T*>& vec);
+
 
             void print() const;
         private:
@@ -161,6 +163,11 @@ namespace reclamation_tm
         decrement_counter(ptr);
     }
 
+    template <class T, template <class> class Q>
+    bool counting_manager<T,Q>::handle_type::is_safe(pointer_type ptr)
+    {
+        return !ptr->counter.load();
+    }
 
     template <class T, template <class> class Q>
     void counting_manager<T,Q>::handle_type::unprotect(pointer_type ptr)
