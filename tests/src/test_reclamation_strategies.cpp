@@ -6,12 +6,6 @@
 #include "thread_coordination.hpp"
 #include "pin_thread.hpp"
 #include "command_line_parser.hpp"
-//#include "test_coordination.hpp"
-
-#include "memory_reclamation/counting_reclamation.hpp"
-//#include "reclamation/delayed_reclamation.hpp"
-#include "memory_reclamation/hazard_reclamation.hpp"
-//#include "reclamation/sequential_reclamation.hpp"
 
 namespace utm = utils_tm;
 namespace otm = utm::out_tm;
@@ -76,8 +70,12 @@ std::atomic_int foo::deleted = -1;
 
 
 
+#include "memory_reclamation/counting_reclamation.hpp"
+#include "memory_reclamation/delayed_reclamation.hpp"
+#include "memory_reclamation/hazard_reclamation.hpp"
+#include "memory_reclamation/sequential_reclamation.hpp"
 
-using reclamation_manager_type = utils_tm::reclamation_tm::hazard_manager<foo>;
+using reclamation_manager_type = utils_tm::reclamation_tm::delayed_manager<foo>;
 using reclamation_handle_type  = typename reclamation_manager_type::handle_type;
 using reclamation_atomic       = typename reclamation_manager_type::atomic_pointer_type;
 
@@ -102,7 +100,7 @@ struct test<ttm::timed_main_thread>
         thread_id = thrd.id;
         auto handle = recl_mngr.get_handle();
 
-        the_one.store(new foo(0));
+        the_one.store(handle.create_pointer(0));
         otm::buffered_out() << c::bgreen << "NEW" << c::reset
                             << "      0    start               new "
                             << the_one.load() << std::endl;

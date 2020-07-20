@@ -1,1 +1,0 @@
-/usr/bin/c++  -std=c++17 -Wall -Wextra -O3 -march=native -g -pthread -static-libstdc++ -Wno-parentheses -Wno-unused-but-set-parameter  -rdynamic CMakeFiles/circular_buffer_test.dir/src/test_circular_buffer.cpp.o  -o circular_buffer_test -lpthread 

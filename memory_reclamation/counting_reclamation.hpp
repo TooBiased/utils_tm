@@ -112,7 +112,11 @@ namespace reclamation_tm
         internal_type* temp = nullptr;
         {   // area for the lock_guard
             std::lock_guard<std::mutex> guard(_parent._freelist_mutex);
-            temp = _parent._freelist.pop_front();
+            auto result = _parent._freelist.pop_front();
+            if (result)
+            {
+                temp = result.value();
+            }
         }
         if (temp)
         {
@@ -166,7 +170,8 @@ namespace reclamation_tm
     template <class T, template <class> class Q>
     bool counting_manager<T,Q>::handle_type::is_safe(pointer_type ptr)
     {
-        return !ptr->counter.load();
+        internal_type* iptr = static_cast<internal_type*>(ptr);
+        return !iptr->counter.load();
     }
 
     template <class T, template <class> class Q>

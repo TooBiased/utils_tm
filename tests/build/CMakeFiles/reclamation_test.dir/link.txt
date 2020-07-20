@@ -1,1 +1,0 @@
-/usr/bin/c++  -std=c++17 -Wall -Wextra -O3 -march=native -g -pthread -static-libstdc++ -Wno-parentheses -Wno-unused-but-set-parameter  -rdynamic CMakeFiles/reclamation_test.dir/src/test_reclamation_strategies.cpp.o  -o reclamation_test -lpthread 

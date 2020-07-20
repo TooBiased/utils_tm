@@ -1,5 +1,0 @@
-/home/maier/IMP/utils/tests/build/CMakeFiles/rebuild_cache.dir
-/home/maier/IMP/utils/tests/build/CMakeFiles/edit_cache.dir
-/home/maier/IMP/utils/tests/build/CMakeFiles/circular_buffer_test.dir
-/home/maier/IMP/utils/tests/build/CMakeFiles/reclamation_test.dir
-/home/maier/IMP/utils/tests/build/CMakeFiles/many_producer_single_consumer_buffer_test.dir
