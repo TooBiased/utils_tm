@@ -15,7 +15,6 @@ namespace reclamation_tm
 
     namespace otm = out_tm;
 
-
     template<class T, size_t maxThreads=64, size_t maxProtections=64>
     class hazard_manager
     {
@@ -237,6 +236,7 @@ namespace reclamation_tm
     template <class T, size_t mt, size_t mp>
     void hazard_manager<T,mt,mp>::handle_type::safe_delete(pointer_type ptr)
     {
+        auto tptr = mark::clear(ptr);
         for (int j = _parent._handle_counter.load(); j >= 0; --j)
         {
             auto temp_handle = _parent._handles[j].load();
@@ -244,19 +244,19 @@ namespace reclamation_tm
             for (int i = temp_handle->_counter.load()-1; i >= 0; --i)
             {
                 auto temp = temp_handle->_ptr[i].load();
-                if (temp == ptr)
+                if (temp == tptr)
                 {
                     // transfer responsibility for deleting
                     if (temp_handle->_ptr[i]
                            .compare_exchange_strong(temp,
-                                                    mark::mark<0>(ptr)))
+                                                    mark::mark<0>(tptr)))
                         // transfer successful
                         return;
                     // else concurrent unprotect we remain responsible
                 }
             }
         }
-        delete ptr;
+        delete tptr;
     }
 
 
@@ -264,18 +264,19 @@ namespace reclamation_tm
     void hazard_manager<T,mt,mp>::handle_type::protect_raw(pointer_type ptr)
     {
         auto pos = _internal._counter.fetch_add(1);
-        _internal._ptr[pos].store(ptr);
+        _internal._ptr[pos].store(mark::clear(ptr));
     }
 
     template <class T, size_t mt, size_t mp>
     void hazard_manager<T,mt,mp>::handle_type::delete_raw(pointer_type ptr)
     {
-        delete ptr;
+        delete mark::clear(ptr);
     }
 
     template <class T, size_t mt, size_t mp>
     bool hazard_manager<T,mt,mp>::handle_type::is_safe(pointer_type ptr)
     {
+        auto tptr = mark::clear(ptr);
         for (int j = _parent._handle_counter.load(); j >= 0; --j)
         {
             auto temp_handle = _parent.handles[j].load();
@@ -283,7 +284,7 @@ namespace reclamation_tm
             for (int i = temp_handle->_counter.load()-1; i>=0; --i)
             {
                 auto temp = temp_handle->_ptr[i].load();
-                if (temp == ptr)
+                if (temp == tptr)
                     return false;
             }
         }
@@ -293,15 +294,16 @@ namespace reclamation_tm
     template <class T, size_t mt, size_t mp>
     void hazard_manager<T,mt,mp>::handle_type::unprotect(pointer_type ptr)
     {
+        auto tptr     = mark::clear(ptr);
         auto last_pos = _internal._counter.load()-1;
         auto last_ptr = mark::clear(_internal._ptr[last_pos].load());
 
         // handle the case, where the last pointer is unprotected
-        if (ptr == last_ptr)
+        if (tptr == last_ptr)
         {
             last_ptr = _internal._ptr[last_pos].exchange(nullptr);
             _internal._counter.store(last_pos);
-            if (mark::get_mark<0>(last_ptr)) continue_deletion(ptr, last_pos);
+            if (mark::get_mark<0>(last_ptr)) continue_deletion(tptr, last_pos);
             return;
         }
 
@@ -309,10 +311,10 @@ namespace reclamation_tm
         {
             auto temp = _internal._ptr[i].load();
 
-            if (ptr == mark::clear(temp))
+            if (tptr == mark::clear(temp))
             {
                 temp = _internal._ptr[i].exchange(last_ptr);
-                if (mark::get_mark<0>(temp)) continue_deletion(ptr, i);
+                if (mark::get_mark<0>(temp)) continue_deletion(tptr, i);
 
                 temp = _internal._ptr[last_pos].exchange(nullptr);
                 // if the last pointer was marked, we have to move the mark
@@ -341,6 +343,7 @@ namespace reclamation_tm
     void hazard_manager<T,mt,mp>::handle_type::continue_deletion(pointer_type ptr,
                                                                  int pos)
     {
+        // auto tptr = mark::clear(ptr);  // is only called with unmarked ptrs
         for (int i = pos-1; i >= 0; --i)
         {
             auto temp = _internal._ptr[i].load();

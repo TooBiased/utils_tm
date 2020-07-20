@@ -130,13 +130,13 @@ namespace reclamation_tm
     T* counting_manager<T,Q>::handle_type::protect(atomic_pointer_type& ptr)
     {
         auto temp  = ptr.load();
-        increment_counter(mark::clear(temp));
+        increment_counter(temp);
         auto temp2 = ptr.load();
         while (temp != temp2)
         {
-            decrement_counter(mark::clear(temp));
+            decrement_counter(temp);
             temp = temp2;
-            increment_counter(mark::clear(temp));
+            increment_counter(temp);
             temp2 = ptr.load();
         }
         return temp;
@@ -170,7 +170,7 @@ namespace reclamation_tm
     template <class T, template <class> class Q>
     bool counting_manager<T,Q>::handle_type::is_safe(pointer_type ptr)
     {
-        internal_type* iptr = static_cast<internal_type*>(ptr);
+        internal_type* iptr = static_cast<internal_type*>(mark::clear(ptr));
         return !iptr->counter.load();
     }
 
@@ -201,13 +201,13 @@ namespace reclamation_tm
     template <class T, template <class> class Q>
     void counting_manager<T,Q>::handle_type::increment_counter(pointer_type ptr) const
     {
-        static_cast<internal_type*>(ptr)->counter.fetch_add(1);
+        static_cast<internal_type*>(mark::clear(ptr))->counter.fetch_add(1);
     }
 
     template <class T, template <class> class Q>
     void counting_manager<T,Q>::handle_type::decrement_counter(pointer_type ptr)
     {
-        internal_type* iptr = static_cast<internal_type*>(ptr);
+        internal_type* iptr = static_cast<internal_type*>(mark::clear(ptr));
         auto           temp = iptr->counter.fetch_sub(1);
         if (temp == 0)
         {

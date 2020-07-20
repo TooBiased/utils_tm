@@ -96,7 +96,7 @@ namespace reclamation_tm
     template <class T>
     void delayed_manager<T>::handle_type::safe_delete(pointer_type ptr)
     {
-        freelist.push_back(ptr);
+        freelist.push_back(mark::clear(ptr));
     }
 
 
@@ -109,7 +109,7 @@ namespace reclamation_tm
     template <class T>
     void delayed_manager<T>::handle_type::delete_raw(pointer_type ptr)
     {
-        delete ptr;
+        delete mark::clear(ptr);
     }
 
     template <class T>

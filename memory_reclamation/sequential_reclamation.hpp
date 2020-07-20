@@ -129,7 +129,7 @@ namespace reclamation_tm
     template <class T>
     void sequential_manager<T>::handle_type::safe_delete(pointer_type ptr) const
     {
-        delete ptr;
+        delete mark::clear(ptr);
     }
 
 
@@ -142,7 +142,7 @@ namespace reclamation_tm
     template <class T>
     void sequential_manager<T>::handle_type::delete_raw(pointer_type ptr) const
     {
-        delete ptr;
+        delete mark::clear(ptr);
     }
 
     template <class T>
