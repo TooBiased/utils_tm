@@ -70,31 +70,28 @@ std::atomic_int foo::deleted = -1;
 
 
 
-#include "memory_reclamation/counting_reclamation.hpp"
 #include "memory_reclamation/delayed_reclamation.hpp"
+#include "memory_reclamation/counting_reclamation.hpp"
 #include "memory_reclamation/hazard_reclamation.hpp"
-#include "memory_reclamation/sequential_reclamation.hpp"
+// This would fail #include "memory_reclamation/sequential_reclamation.hpp"
 
-using reclamation_manager_type = utils_tm::reclamation_tm::delayed_manager<foo>;
-using reclamation_handle_type  = typename reclamation_manager_type::handle_type;
-using reclamation_atomic       = typename reclamation_manager_type::atomic_pointer_type;
+namespace rtm = utils_tm::reclamation_tm;
 
-
-alignas (64) static reclamation_manager_type recl_mngr;
-alignas (64) static reclamation_atomic       the_one;
-alignas (64) static std::atomic_bool         finished{false};
+alignas (64) static std::atomic<foo*>          the_one;
+alignas (64) static std::atomic_bool           finished{false};
 
 
 
 
 
-template <class ThreadType>
+template <class ReclManager, class ThreadType>
 struct test;
 
-template <>
-struct test<ttm::timed_main_thread>
+template <class ReclManager>
+struct test<ReclManager, ttm::timed_main_thread>
 {
-    static int execute(ttm::timed_main_thread thrd, size_t it, size_t n)
+    static int execute(ttm::timed_main_thread thrd, size_t it, size_t n,
+                       ReclManager& recl_mngr)
     {
         utm::pin_to_core(thrd.id);
         thread_id = thrd.id;
@@ -131,6 +128,11 @@ struct test<ttm::timed_main_thread>
                     current = next;
                 }
                 finished.store(true);
+                if (! the_one.compare_exchange_strong(current,nullptr))
+                    otm::out() << "Error: on changing ghe pointer to nullptr\n"
+                               << std::flush;
+                handle.unprotect(current);
+                handle.safe_delete(current);
                 return 0;
             });
 
@@ -139,10 +141,11 @@ struct test<ttm::timed_main_thread>
     }
 };
 
-template <>
-struct test<ttm::untimed_sub_thread>
+template <class ReclManager>
+struct test<ReclManager, ttm::untimed_sub_thread>
 {
-    static int execute(ttm::untimed_sub_thread thrd, size_t, size_t)
+    static int execute(ttm::untimed_sub_thread thrd, size_t, size_t,
+                       ReclManager& recl_mngr)
     {
         utm::pin_to_core(thrd.id);
         thread_id = thrd.id;
@@ -154,6 +157,7 @@ struct test<ttm::untimed_sub_thread>
                 while (!finished.load())
                 {
                     auto current = handle.protect(the_one);
+                    if (!current) continue;
                     for (size_t i = 0; i < 100; ++i)
                         current->counter.fetch_add(1);
                     handle.unprotect(current);
@@ -167,6 +171,20 @@ struct test<ttm::untimed_sub_thread>
 };
 
 
+
+template <class ThreadType>
+using delayed_test  = test<rtm::delayed_manager<foo> , ThreadType>;
+template <class ThreadType>
+using counting_test = test<rtm::counting_manager<foo>, ThreadType>;
+template <class ThreadType>
+using hazard_test   = test<rtm::hazard_manager<foo>  , ThreadType>;
+
+void reset_test()
+{
+    foo::deleted.store(-1);
+    finished.store(false);
+}
+
 /* MAIN FUNCTION: READS COMMANDLINE AND STARTS TEST THREADS *******************/
 int main(int argn, char** argc)
 {
@@ -177,6 +195,22 @@ int main(int argn, char** argc)
     if (c.bool_arg("-h")) { print_help(); return 0; }
     if (! c.report()) return 1;
 
-    ttm::start_threads<test>(p, it, n);
+    otm::out() << otm::color::bblue << "DELAYED RECLAMATION TEST"
+               << otm::color::reset << std::endl;
+    rtm::delayed_manager<foo> delayed_mngr;
+    ttm::start_threads<delayed_test>(p, it, n, delayed_mngr);
+    reset_test();
+
+    otm::out() << std::endl << otm::color::bblue << "COUNTING RECLAMATION TEST"
+               << otm::color::reset << std::endl;
+    rtm::counting_manager<foo> counting_mngr;
+    ttm::start_threads<counting_test>(p, it, n, counting_mngr);
+    reset_test();
+
+    otm::out() << std::endl << otm::color::bblue << "HAZARD RECLAMATION TEST"
+               << otm::color::reset << std::endl;
+    rtm::hazard_manager<foo> hazard_mngr;
+    ttm::start_threads<hazard_test>(p, it, n, hazard_mngr);
+    reset_test();
     return 0;
 }
