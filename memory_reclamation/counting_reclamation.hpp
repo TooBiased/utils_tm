@@ -71,7 +71,7 @@ namespace reclamation_tm
             handle_type(handle_type&& other) noexcept = default;
             handle_type& operator=(handle_type&& other) noexcept = default;
             ~handle_type() = default;
-\
+
         private:
             parent_type& _parent;
 
