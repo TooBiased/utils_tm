@@ -39,8 +39,9 @@ namespace reclamation_tm
             void emplace(Args&& ... arg)
             { new (this) T(std::forward<Args>(arg)...); }
 
-            std::atomic_int    counter;
-            size_t epoch;
+            std::atomic_uint counter;
+            uint epoch;
+            static constexpr uint mark = 1<<31;
         };
         using queue_type = Queue<internal_type*>;
     public:
@@ -94,6 +95,8 @@ namespace reclamation_tm
         private:
             inline void increment_counter(pointer_type ptr) const;
             inline void decrement_counter(pointer_type ptr);
+            inline void mark_counter(pointer_type ptr);
+            inline void internal_delete(internal_type* iptr);
 
         };
         handle_type get_handle() { return handle_type(*this); }
@@ -151,9 +154,7 @@ namespace reclamation_tm
     template <class T, template <class> class Q>
     void counting_manager<T,Q>::handle_type::safe_delete(pointer_type ptr)
     {
-        // this counting pointer is implemented such that elements are freed
-        // when the counter is decremented below 0
-        decrement_counter(ptr);
+        mark_counter(ptr);
     }
 
 
@@ -161,10 +162,7 @@ namespace reclamation_tm
     template <class T, template <class> class Q>
     void counting_manager<T,Q>::handle_type::delete_raw(pointer_type ptr)
     {
-
-        // this counting pointer is implemented such that elements are freed
-        // when the counter is decremented below 0
-        decrement_counter(ptr);
+        mark_counter(ptr);
     }
 
     template <class T, template <class> class Q>
@@ -181,7 +179,8 @@ namespace reclamation_tm
     }
 
     template <class T, template <class> class Q>
-    void counting_manager<T,Q>::handle_type::unprotect(std::vector<pointer_type>& vec)
+    void
+    counting_manager<T,Q>::handle_type::unprotect(std::vector<pointer_type>& vec)
     {
         for (auto ptr : vec)
             decrement_counter(ptr);
@@ -209,18 +208,45 @@ namespace reclamation_tm
     {
         internal_type* iptr = static_cast<internal_type*>(mark::clear(ptr));
         auto           temp = iptr->counter.fetch_sub(1);
-        if (temp == 0)
-        {
-            // more subtractions than additions -> there was a deletion
-            iptr->internal_type::erase();
-            iptr->epoch++;
-            iptr->counter.fetch_add(1); // counteract the (delete-)subtraction
-
-            std::lock_guard<std::mutex> guard(_parent._freelist_mutex);
-            _parent._freelist.push_back(iptr);
-        }
         debug_tm::if_debug("Warning: in decrement_counter - "
-                        "encountered a negative counter", temp < 0);
+                           "created a negative counter", temp == 0);
+        debug_tm::if_debug("Warning: in decrement counter - "
+                           "weird counter",
+                           (temp>666) && (temp<internal_type::mark+1));
+
+        if (temp == internal_type::mark+1)
+        {
+            internal_delete(iptr);
+        }
+    }
+
+    template <class T, template <class> class Q>
+    void counting_manager<T,Q>::handle_type::mark_counter(pointer_type ptr)
+    {
+        internal_type* iptr = static_cast<internal_type*>(mark::clear(ptr));
+        auto           temp = iptr->counter.load();
+        if (temp & internal_type::mark)
+            return;
+
+        temp = iptr->counter.fetch_or(internal_type::mark);
+
+        if (temp == 0) // element was unused, and not marked before
+            internal_delete();
+    }
+
+    template <class T, template <class> class Q>
+    void
+    counting_manager<T,Q>::handle_type::internal_delete(internal_type* iptr)
+    {
+        auto temp = internal_type::mark;
+        if (! iptr->counter.compare_exchange_strong(temp, 0))
+            return;
+
+        iptr->internal_type::erase();
+        iptr->epoch++;
+
+        std::lock_guard<std::mutex> guard(_parent._freelist_mutex);
+        _parent._freelist.push_back(iptr);
     }
 };
 };
