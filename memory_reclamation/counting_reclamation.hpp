@@ -231,7 +231,7 @@ namespace reclamation_tm
         temp = iptr->counter.fetch_or(internal_type::mark);
 
         if (temp == 0) // element was unused, and not marked before
-            internal_delete();
+            internal_delete(iptr);
     }
 
     template <class T, template <class> class Q>
