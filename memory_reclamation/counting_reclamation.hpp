@@ -15,9 +15,6 @@ namespace utils_tm
 {
 namespace reclamation_tm
 {
-
-    // TODO THIS ONLY WORKS WITH THE DEFAULT DESTRUCTOR?
-
     template<class T, template<class> class Queue = circular_buffer> // create default parameters for D
     class counting_manager
     {
@@ -66,13 +63,14 @@ namespace reclamation_tm
             using pointer_type        = typename parent_type::pointer_type;
             using atomic_pointer_type = typename parent_type::atomic_pointer_type;
 
-            handle_type(parent_type& parent) : _parent(parent) { }
+            handle_type(parent_type& parent) : n(0), _parent(parent) { }
             handle_type(const handle_type&) = delete;
             handle_type& operator=(const handle_type&) = delete;
             handle_type(handle_type&& other) noexcept = default;
             handle_type& operator=(handle_type&& other) noexcept = default;
             ~handle_type() = default;
 
+            size_t       n;
         private:
             parent_type& _parent;
 
@@ -81,15 +79,13 @@ namespace reclamation_tm
             inline T*   create_pointer(Args&& ...arg) const;
 
             inline T*   protect(atomic_pointer_type& ptr);
-            inline void safe_delete(pointer_type ptr);
-
-            inline void protect_raw(pointer_type ptr) const;
-            inline void delete_raw(pointer_type ptr);
-            inline bool is_safe(pointer_type ptr);
-
+            inline void protect_raw(pointer_type ptr);
             inline void unprotect(pointer_type ptr);
             inline void unprotect(std::vector<T*>& vec);
 
+            inline void safe_delete(pointer_type ptr);
+            inline void delete_raw(pointer_type ptr);
+            inline bool is_safe(pointer_type ptr);
 
             void print() const;
         private:
@@ -108,7 +104,8 @@ namespace reclamation_tm
 
 
 
-
+    // *** HANDLE STUFF ********************************************************
+    // ***** HANDLE MAIN FUNCTIONALITY *****************************************
     template <class T, template <class> class Q> template <class ...Args>
     T* counting_manager<T,Q>::handle_type::create_pointer(Args&& ... arg) const
     {
@@ -132,6 +129,7 @@ namespace reclamation_tm
     template <class T, template <class> class Q>
     T* counting_manager<T,Q>::handle_type::protect(atomic_pointer_type& ptr)
     {
+        ++n;
         auto temp  = ptr.load();
         increment_counter(temp);
         auto temp2 = ptr.load();
@@ -146,9 +144,26 @@ namespace reclamation_tm
     }
 
     template <class T, template <class> class Q>
-    void counting_manager<T,Q>::handle_type::protect_raw(pointer_type ptr) const
+    void counting_manager<T,Q>::handle_type::protect_raw(pointer_type ptr)
     {
+        ++n;
         increment_counter(ptr);
+    }
+
+    template <class T, template <class> class Q>
+    void counting_manager<T,Q>::handle_type::unprotect(pointer_type ptr)
+    {
+        --n;
+        decrement_counter(ptr);
+    }
+
+    template <class T, template <class> class Q>
+    void
+    counting_manager<T,Q>::handle_type::unprotect(std::vector<pointer_type>& vec)
+    {
+        n -= vec.size();
+        for (auto ptr : vec)
+            decrement_counter(ptr);
     }
 
     template <class T, template <class> class Q>
@@ -156,8 +171,6 @@ namespace reclamation_tm
     {
         mark_counter(ptr);
     }
-
-
 
     template <class T, template <class> class Q>
     void counting_manager<T,Q>::handle_type::delete_raw(pointer_type ptr)
@@ -172,21 +185,10 @@ namespace reclamation_tm
         return !iptr->counter.load();
     }
 
-    template <class T, template <class> class Q>
-    void counting_manager<T,Q>::handle_type::unprotect(pointer_type ptr)
-    {
-        decrement_counter(ptr);
-    }
-
-    template <class T, template <class> class Q>
-    void
-    counting_manager<T,Q>::handle_type::unprotect(std::vector<pointer_type>& vec)
-    {
-        for (auto ptr : vec)
-            decrement_counter(ptr);
-    }
 
 
+
+    // ***** HANDLE HELPER FUNCTIONS
     template <class T, template <class> class Q>
     void counting_manager<T,Q>::handle_type::print() const
     {
@@ -195,7 +197,6 @@ namespace reclamation_tm
                       << _parent._freelist.size() << " elements in the freelist *"
                       << std::endl;
     }
-
 
     template <class T, template <class> class Q>
     void counting_manager<T,Q>::handle_type::increment_counter(pointer_type ptr) const

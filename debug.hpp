@@ -25,6 +25,10 @@
 #include <string>
 #include <iostream>
 
+#ifndef NO_EXCEPT
+#include <exception>
+#endif
+
 #include "output.hpp"
 
 namespace utils_tm{
@@ -70,7 +74,12 @@ namespace debug_tm{
             {
                 dout() << out_tm::color::red    << str
                        << out_tm::color::reset  << std::endl;
+                #ifndef NO_EXCEPT
                 exit(error_code);
+                #else
+                throw std::runtime_error(str);
+                #endif
+
             }
         }
     }

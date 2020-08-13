@@ -14,8 +14,9 @@ namespace reclamation_tm
 {
 
     namespace otm = out_tm;
+    namespace dtm = debug_tm;
 
-    template<class T, size_t maxThreads=64, size_t maxProtections=64>
+    template<class T, size_t maxThreads=64, size_t maxProtections=256>
     class hazard_manager
     {
     private:
@@ -35,6 +36,13 @@ namespace reclamation_tm
 
         struct internal_handle
         {
+            enum class istate
+            {
+                NOT_FOUND,
+                MARKED,
+                UNMARKED
+            };
+
             internal_handle() : _counter(0)
             {
                 for (size_t i = 0; i < maxProtections; ++i)
@@ -43,7 +51,15 @@ namespace reclamation_tm
 
             std::atomic_int               _counter;
             atomic_pointer_type           _ptr[maxProtections];
-            std::atomic<internal_handle*> _free_queue_next;
+
+            inline int                   insert(pointer_type ptr);
+            inline std::pair<istate,int> remove(pointer_type ptr);
+            inline istate                replace(int i, pointer_type ptr);
+
+            // has to work concurrently
+            inline istate                mark  (pointer_type ptr, int pos = 1);
+            inline int                   find  (pointer_type ptr) const;
+            void                         print () const;
         };
 
         class handle_type
@@ -51,6 +67,8 @@ namespace reclamation_tm
         private:
             using parent_type = hazard_manager<T,maxThreads,maxProtections>;
             using this_type   = handle_type;
+
+            using istate      = typename internal_handle::istate;
 
         public:
             using pointer_type        = typename parent_type::pointer_type;
@@ -68,19 +86,21 @@ namespace reclamation_tm
             inline T*   create_pointer(Args&& ... args) const;
 
             inline T*   protect(atomic_pointer_type& ptr);
-            inline void safe_delete(pointer_type ptr);
-
             inline void protect_raw(pointer_type ptr);
-            inline void delete_raw(pointer_type ptr);
-            inline bool is_safe(pointer_type ptr);
 
             inline void unprotect(pointer_type ptr);
             inline void unprotect(std::vector<T*>& vec);
 
+            inline void safe_delete(pointer_type ptr);
+            inline void delete_raw(pointer_type ptr);
+            inline bool is_safe(pointer_type ptr);
+
+
             void print() const;
 
+            size_t n;
         private:
-            inline void continue_deletion(pointer_type ptr, int pos);
+            inline void continue_deletion(pointer_type ptr, int pos = -1);
 
             parent_type&     _parent;
             internal_handle& _internal;
@@ -164,14 +184,163 @@ namespace reclamation_tm
 
 
 
+
+    // *** INTERNAL HANDLE *****************************************************
+    template <class T, size_t mt, size_t mp>
+    int hazard_manager<T,mt,mp>::internal_handle::insert(pointer_type ptr)
+    {
+        auto pos = _counter.fetch_add(1);
+        dtm::if_debug_critical("Error: in insert -- "
+                               "too many protected pointers", pos >= int(mp));
+        dtm::if_debug_critical("Error: in insert -- "
+                               "below 0 protected pointers", pos < 0);
+
+        _ptr[pos].store(ptr);
+        return pos;
+    }
+
+    template <class T, size_t mt, size_t mp>
+    std::pair<typename hazard_manager<T,mt,mp>::internal_handle::istate, int>
+    hazard_manager<T,mt,mp>::internal_handle::remove(pointer_type ptr)
+    {
+        auto pos = find(ptr);
+        if (pos < 0)
+        {
+            return std::make_pair(istate::NOT_FOUND, -1);
+        }
+
+        auto last_pos = _counter.load()-1;
+        dtm::if_debug_critical("Error: in remove -- "
+                               "too many protected pointers", pos >= int(mp));
+        dtm::if_debug_critical("Error: in remove -- "
+                               "below 0 protected pointers", pos < 0);
+
+        if (pos == last_pos)
+        {
+            _counter.fetch_sub(1);
+            auto temp = _ptr[pos].exchange(nullptr);
+            dtm::if_debug("Warning: in rec handle remove"
+                          " -- removing last element changed",
+                          mark::clear(temp) != ptr);
+            return std::make_pair((mark::get_mark<0>(temp)) ? istate::MARKED
+                                                            : istate::UNMARKED,
+                                  pos);
+        }
+
+        auto last_ptr = _ptr[last_pos].load();
+        auto temp     = _ptr[pos].exchange(last_ptr);
+
+        dtm::if_debug("Warning: in rec handle remove"
+                      " -- element changed since call of find",
+                      mark::clear(temp) != ptr);
+
+        bool was_marked = mark::get_mark<0>(temp);
+
+        _counter.fetch_sub(1);
+        temp = _ptr[last_pos].exchange(nullptr);
+        if (last_ptr != temp)
+        {
+            dtm::if_debug("Warning: in rec handle remove"
+                          " -- last element changed", mark::clear(temp) != last_ptr);
+            _ptr[pos].store(last_ptr);
+        }
+
+        return std::make_pair(was_marked ? istate::MARKED : istate::UNMARKED,
+                              pos);
+    }
+
+    template <class T, size_t mt, size_t mp>
+    typename hazard_manager<T,mt,mp>::internal_handle::istate
+    hazard_manager<T,mt,mp>::internal_handle::replace(int i, pointer_type ptr)
+    {
+        auto temp = _ptr[i].exchange(ptr);
+        return mark::get_mark<0>(temp) ? istate::MARKED : istate::UNMARKED;
+    }
+
+            // has to work concurrently
+    template <class T, size_t mt, size_t mp>
+    typename hazard_manager<T,mt,mp>::internal_handle::istate
+    hazard_manager<T,mt,mp>::internal_handle::mark(pointer_type ptr, int pos)
+    {
+        auto temp = pos;
+        if (pos < 0) temp = _counter.load() -1;
+        dtm::if_debug("Error: in mark -- "
+                               "pos larger than expected", pos >= int(mp));
+        dtm::if_debug("Error: in mark -- "
+                               "pos below 0 after load", pos < 0);
+
+        for (int i = temp; i >= 0; i--)
+        {
+            auto temp = _ptr[i].load();
+            if (mark::clear(temp) == ptr)
+            {
+                // was marked before -> stays
+                if (mark::get_mark<0>(temp)) return istate::MARKED;
+                // try to mark it
+                if (_ptr[i].compare_exchange_strong(temp, mark::mark<0>(ptr)))
+                    return istate::UNMARKED;
+                // try failed, because it was marked concurrently
+                if (temp == mark::mark<0>(ptr)) return istate::MARKED;
+                // failed because it was removed for some reason
+                // it was either removed, or pushed forward
+                // continue to find it ...
+            }
+
+        }
+        return istate::NOT_FOUND;
+    }
+
+    template <class T, size_t mt, size_t mp>
+    int hazard_manager<T,mt,mp>::internal_handle::find(pointer_type ptr) const
+    {
+        auto temp = _counter.load() -1;
+        dtm::if_debug("Error: in find -- "
+                      "too many current elements", temp >= int(mp));
+        if (temp >= int(mp))
+        {
+            std::cout << "this is weird and should not happen" << std::endl
+                      << temp << " elements when calling find" << std::endl
+                      << this << " this pointer" << std::endl;
+        }
+
+        dtm::if_debug("Error: in find -- "
+                      "below 0 current elements", temp < -1); // might be 0
+        if (temp < -2)
+        {
+            std::cout << "this is weird and should not happen (2nd)" << std::endl
+                      << temp << " elements when calling find" << std::endl
+                      << this << " this pointer" << std::endl;
+        }
+
+        for (int i = temp; i >= 0; i--)
+        {
+            if (mark::clear(_ptr[i].load()) == ptr) return i;
+        }
+        return -1;
+    }
+
+    template <class T, size_t mt, size_t mp>
+    void hazard_manager<T,mt,mp>::internal_handle::print() const
+    {
+
+        auto temp = _counter.load();
+        std::cout << "counter is:" << temp << std::endl;
+        for (int i = temp+2; i >= 0; i--)
+        {
+            std::cout << _ptr[i] << std::endl;
+        };
+    }
+
+
+    // *** HANDLE **************************************************************
+    // ***** HANDLE CONSTRUCTORS ***********************************************
     template <class T, size_t mt, size_t mp>
     hazard_manager<T,mt,mp>::handle_type::handle_type(parent_type& parent,
                                                       internal_handle& internal,
                                                       int id)
-        : _parent(parent), _internal(internal), _id(id)
+        : n(0), _parent(parent), _internal(internal), _id(id)
     { }
 
-    // There cannot be concurrent operations
     template <class T, size_t mt, size_t mp>
     hazard_manager<T,mt,mp>::handle_type::handle_type(handle_type&& source) noexcept
         : _parent(source._parent), _internal(source._internal), _id(source._id)
@@ -207,7 +376,7 @@ namespace reclamation_tm
 
 
 
-
+    // ***** HANDLE FUNCTIONALITY **********************************************
     template <class T, size_t mt, size_t mp> template <class ... Args>
     T* hazard_manager<T,mt,mp>::handle_type::create_pointer(Args&& ... args) const
     {
@@ -217,116 +386,43 @@ namespace reclamation_tm
     template <class T, size_t mt, size_t mp>
     T* hazard_manager<T,mt,mp>::handle_type::protect(atomic_pointer_type& ptr)
     {
-        auto pos = _internal._counter.fetch_add(1);
+        ++n;
         auto temp0 = ptr.load();
-        _internal._ptr[pos].store(mark::clear(temp0));
+        auto pos   = _internal.insert(mark::clear(temp0));
         auto temp1 = ptr.load();
-        while (temp0 != temp1)
+        while (mark::clear(temp0) != mark::clear(temp1))
         {
-            temp0 = _internal._ptr[pos].exchange(mark::clear(temp1));
-            if (mark::get_mark<0>(temp0))
+            auto state = _internal.replace(pos, mark::clear(temp1));
+            if (state == istate::MARKED)
                 continue_deletion(mark::clear(temp0), pos);
-
             temp0 = temp1;
             temp1 = ptr.load();
         }
-        return temp0;
+        return temp1;
     }
-
-    template <class T, size_t mt, size_t mp>
-    void hazard_manager<T,mt,mp>::handle_type::safe_delete(pointer_type ptr)
-    {
-        auto tptr = mark::clear(ptr);
-        for (int j = _parent._handle_counter.load(); j >= 0; --j)
-        {
-            auto temp_handle = _parent._handles[j].load();
-            if (mark::get_mark<0>(temp_handle)) continue;
-            for (int i = temp_handle->_counter.load()-1; i >= 0; --i)
-            {
-                auto temp = temp_handle->_ptr[i].load();
-                if (temp == tptr)
-                {
-                    // transfer responsibility for deleting
-                    if (temp_handle->_ptr[i]
-                           .compare_exchange_strong(temp,
-                                                    mark::mark<0>(tptr)))
-                        // transfer successful
-                        return;
-                    // else concurrent unprotect we remain responsible
-                }
-            }
-        }
-        delete tptr;
-    }
-
 
     template <class T, size_t mt, size_t mp>
     void hazard_manager<T,mt,mp>::handle_type::protect_raw(pointer_type ptr)
     {
-        auto pos = _internal._counter.fetch_add(1);
-        _internal._ptr[pos].store(mark::clear(ptr));
-    }
-
-    template <class T, size_t mt, size_t mp>
-    void hazard_manager<T,mt,mp>::handle_type::delete_raw(pointer_type ptr)
-    {
-        delete mark::clear(ptr);
-    }
-
-    template <class T, size_t mt, size_t mp>
-    bool hazard_manager<T,mt,mp>::handle_type::is_safe(pointer_type ptr)
-    {
-        auto tptr = mark::clear(ptr);
-        for (int j = _parent._handle_counter.load(); j >= 0; --j)
-        {
-            auto temp_handle = _parent.handles[j].load();
-            if (mark::get_mark<0>(temp_handle)) continue;
-            for (int i = temp_handle->_counter.load()-1; i>=0; --i)
-            {
-                auto temp = temp_handle->_ptr[i].load();
-                if (temp == tptr)
-                    return false;
-            }
-        }
-        return true;
+        ++n;
+        _internal.insert(mark::clear(ptr));
     }
 
     template <class T, size_t mt, size_t mp>
     void hazard_manager<T,mt,mp>::handle_type::unprotect(pointer_type ptr)
     {
-        auto tptr     = mark::clear(ptr);
-        auto last_pos = _internal._counter.load()-1;
-        auto last_ptr = mark::clear(_internal._ptr[last_pos].load());
-
-        // handle the case, where the last pointer is unprotected
-        if (tptr == last_ptr)
+        --n;
+        auto cptr = mark::clear(ptr);
+        auto [st, pos] = _internal.remove(cptr);
+        dtm::if_debug("Warning: in recl handle unprotect -- pointer not found",
+                      st == istate::NOT_FOUND);
+        if (st == istate::NOT_FOUND)
         {
-            last_ptr = _internal._ptr[last_pos].exchange(nullptr);
-            _internal._counter.store(last_pos);
-            if (mark::get_mark<0>(last_ptr)) continue_deletion(tptr, last_pos);
-            return;
+            std::cout << "looking for " << cptr << " in:" << std::endl;
+            _internal.print();
         }
-
-        for (int i = last_pos -1; i >= 0; --i)
-        {
-            auto temp = _internal._ptr[i].load();
-
-            if (tptr == mark::clear(temp))
-            {
-                temp = _internal._ptr[i].exchange(last_ptr);
-                if (mark::get_mark<0>(temp)) continue_deletion(tptr, i);
-
-                temp = _internal._ptr[last_pos].exchange(nullptr);
-                // if the last pointer was marked, we have to move the mark
-                // protections are removed from back to front, therefore in case
-                // of multiples it is not important which pointer is marked
-                if (mark::get_mark<0>(temp))
-                {
-                    _internal._counter.store(last_pos);
-                    _internal._ptr[i].store(temp);
-                }
-            }
-        }
+        if (st == istate::MARKED)
+            continue_deletion(cptr, pos);
     }
 
     template <class T, size_t mt, size_t mp>
@@ -338,47 +434,50 @@ namespace reclamation_tm
         }
     }
 
-
     template <class T, size_t mt, size_t mp>
-    void hazard_manager<T,mt,mp>::handle_type::continue_deletion(pointer_type ptr,
-                                                                 int pos)
+    void hazard_manager<T,mt,mp>::handle_type::safe_delete(pointer_type ptr)
     {
-        // auto tptr = mark::clear(ptr);  // is only called with unmarked ptrs
-        for (int i = pos-1; i >= 0; --i)
-        {
-            auto temp = _internal._ptr[i].load();
-            if (temp == ptr)
-            {
-                // transfer responsibility for deleting (locally)
-                _internal._ptr[i].store(mark::mark<0>(ptr));
-                return;
-            }
-        }
-
-        for (int j = _id-1; j >= 0; --j)
-        {
-            auto temp_handle = _parent._handles[j].load();
-            if (mark::get_mark<0>(temp_handle)) continue;
-            for (int i = temp_handle->_counter.load()-1; i >= 0; --i)
-            {
-                auto temp = temp_handle->_ptr[i].load();
-                if (temp == ptr)
-                {
-                    // transfer responsibility for deleting
-                    if (temp_handle->_ptr[i]
-                           .compare_exchange_strong(temp,
-                                                    mark::mark<0>(ptr)))
-                        // transfer successful
-                        return;
-                    // else concurrent unprotect we remain responsible
-                }
-            }
-        }
-        delete ptr;
+        continue_deletion(ptr);
     }
 
+    template <class T, size_t mt, size_t mp>
+    void hazard_manager<T,mt,mp>::handle_type::delete_raw(pointer_type ptr)
+    {
+        delete mark::clear(ptr);
+    }
 
+    template <class T, size_t mt, size_t mp>
+    bool hazard_manager<T,mt,mp>::handle_type::is_safe(pointer_type ptr)
+    {
+        auto cptr = mark::clear(ptr);
+        for (int i = _parent._handle_counter.load(); i >= 0; --i)
+        {
+            auto temp_handle = _parent._handles[i].load();
+            if (mark::get_mark<0>(temp_handle)) continue;
+            if (temp_handle->find(cptr) != -1)
+                return false;
+        }
+        return true;
+    }
 
+    // ***** HANDLE HELPER FUNCTION ********************************************
+    template <class T, size_t mt, size_t mp>
+    void hazard_manager<T,mt,mp>::handle_type::continue_deletion(
+        pointer_type ptr,
+        int pos)
+    {
+        auto temp = _internal.mark(ptr, pos);
+        if (temp != istate::NOT_FOUND) return;
+
+        for (int i = _id-1; i >=0; --i)
+        {
+            auto temp_handle = _parent._handles[i].load();
+            if (mark::get_mark<0>(temp_handle)) continue;
+            if (temp_handle->mark(ptr) != istate::NOT_FOUND) return;
+        }
+
+        delete ptr;
+    }
 
     template <class T, size_t mt, size_t mp>
     void hazard_manager<T,mt,mp>::handle_type::print() const
