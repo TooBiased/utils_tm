@@ -8,6 +8,8 @@
 #include "../output.hpp"
 #include "../debug.hpp"
 
+#include "default_destructor.hpp"
+
 namespace utils_tm
 {
 namespace reclamation_tm
@@ -16,17 +18,20 @@ namespace reclamation_tm
     namespace otm = out_tm;
     namespace dtm = debug_tm;
 
-    template<class T, size_t maxThreads=64, size_t maxProtections=256>
+    template<class T,
+             class Destructor = default_destructor<T>,
+             size_t maxThreads=64, size_t maxProtections=256>
     class hazard_manager
     {
     private:
-        using this_type           = hazard_manager<T>;
+        using this_type           = hazard_manager<T, Destructor,
+                                                   maxThreads, maxProtections>;
     public:
         using pointer_type        = T*;
         using atomic_pointer_type = std::atomic<T*>;
 
-        hazard_manager()
-            : _handle_counter(-1)
+        hazard_manager(const Destructor& destructor = Destructor())
+            : _destructor(destructor), _handle_counter(-1)
         { for (auto& a : _handles) a.store(nullptr); }
         hazard_manager(const hazard_manager&) = delete;
         hazard_manager& operator=(const hazard_manager&) = delete;
@@ -65,7 +70,8 @@ namespace reclamation_tm
         class handle_type
         {
         private:
-            using parent_type = hazard_manager<T,maxThreads,maxProtections>;
+            using parent_type = hazard_manager<T,Destructor,
+                                               maxThreads,maxProtections>;
             using this_type   = handle_type;
 
             using istate      = typename internal_handle::istate;
@@ -111,15 +117,16 @@ namespace reclamation_tm
         handle_type get_handle();
         void print() const;
     private:
-        std::atomic_int           _handle_counter;
+        Destructor                    _destructor;
+        std::atomic_int               _handle_counter;
         std::atomic<internal_handle*> _handles[maxThreads];
 
     };
 
 
 
-    template <class T, size_t mt, size_t mp>
-    hazard_manager<T,mt,mp>::~hazard_manager()
+    template <class T, class D, size_t mt, size_t mp>
+    hazard_manager<T,D,mt,mp>::~hazard_manager()
     {
         auto counter = _handle_counter.load();
         for (int i = counter; i >= 0; --i)
@@ -135,9 +142,9 @@ namespace reclamation_tm
         }
     }
 
-    template <class T, size_t mt, size_t mp>
-    typename hazard_manager<T,mt,mp>::handle_type
-    hazard_manager<T,mt,mp>::get_handle()
+    template <class T, class D, size_t mt, size_t mp>
+    typename hazard_manager<T,D,mt,mp>::handle_type
+    hazard_manager<T,D,mt,mp>::get_handle()
     {
         internal_handle* temp0 = new internal_handle();
         internal_handle* temp1;
@@ -172,8 +179,8 @@ namespace reclamation_tm
         return handle_type(*this, *temp0, -666);
     }
 
-    template <class T, size_t mt, size_t mp>
-    void hazard_manager<T,mt,mp>::print() const
+    template <class T, class D, size_t mt, size_t mp>
+    void hazard_manager<T,D,mt,mp>::print() const
     {
         otm::out() << "hazard manager print: " << _handle_counter.load()+1 << "handles" << std::endl;
         for (size_t i = 0; i < mt; ++i)
@@ -186,8 +193,8 @@ namespace reclamation_tm
 
 
     // *** INTERNAL HANDLE *****************************************************
-    template <class T, size_t mt, size_t mp>
-    int hazard_manager<T,mt,mp>::internal_handle::insert(pointer_type ptr)
+    template <class T, class D, size_t mt, size_t mp>
+    int hazard_manager<T,D,mt,mp>::internal_handle::insert(pointer_type ptr)
     {
         auto pos = _counter.fetch_add(1);
         dtm::if_debug_critical("Error: in insert -- "
@@ -199,9 +206,9 @@ namespace reclamation_tm
         return pos;
     }
 
-    template <class T, size_t mt, size_t mp>
-    std::pair<typename hazard_manager<T,mt,mp>::internal_handle::istate, int>
-    hazard_manager<T,mt,mp>::internal_handle::remove(pointer_type ptr)
+    template <class T, class D, size_t mt, size_t mp>
+    std::pair<typename hazard_manager<T,D,mt,mp>::internal_handle::istate, int>
+    hazard_manager<T,D,mt,mp>::internal_handle::remove(pointer_type ptr)
     {
         auto pos = find(ptr);
         if (pos < 0)
@@ -249,18 +256,18 @@ namespace reclamation_tm
                               pos);
     }
 
-    template <class T, size_t mt, size_t mp>
-    typename hazard_manager<T,mt,mp>::internal_handle::istate
-    hazard_manager<T,mt,mp>::internal_handle::replace(int i, pointer_type ptr)
+    template <class T, class D, size_t mt, size_t mp>
+    typename hazard_manager<T,D,mt,mp>::internal_handle::istate
+    hazard_manager<T,D,mt,mp>::internal_handle::replace(int i, pointer_type ptr)
     {
         auto temp = _ptr[i].exchange(ptr);
         return mark::get_mark<0>(temp) ? istate::MARKED : istate::UNMARKED;
     }
 
             // has to work concurrently
-    template <class T, size_t mt, size_t mp>
-    typename hazard_manager<T,mt,mp>::internal_handle::istate
-    hazard_manager<T,mt,mp>::internal_handle::mark(pointer_type ptr, int pos)
+    template <class T, class D, size_t mt, size_t mp>
+    typename hazard_manager<T,D,mt,mp>::internal_handle::istate
+    hazard_manager<T,D,mt,mp>::internal_handle::mark(pointer_type ptr, int pos)
     {
         auto temp = pos;
         if (pos < 0) temp = _counter.load() -1;
@@ -290,8 +297,8 @@ namespace reclamation_tm
         return istate::NOT_FOUND;
     }
 
-    template <class T, size_t mt, size_t mp>
-    int hazard_manager<T,mt,mp>::internal_handle::find(pointer_type ptr) const
+    template <class T, class D, size_t mt, size_t mp>
+    int hazard_manager<T,D,mt,mp>::internal_handle::find(pointer_type ptr) const
     {
         auto temp = _counter.load() -1;
         dtm::if_debug("Error: in find -- "
@@ -319,8 +326,8 @@ namespace reclamation_tm
         return -1;
     }
 
-    template <class T, size_t mt, size_t mp>
-    void hazard_manager<T,mt,mp>::internal_handle::print() const
+    template <class T, class D, size_t mt, size_t mp>
+    void hazard_manager<T,D,mt,mp>::internal_handle::print() const
     {
 
         auto temp = _counter.load();
@@ -334,23 +341,23 @@ namespace reclamation_tm
 
     // *** HANDLE **************************************************************
     // ***** HANDLE CONSTRUCTORS ***********************************************
-    template <class T, size_t mt, size_t mp>
-    hazard_manager<T,mt,mp>::handle_type::handle_type(parent_type& parent,
+    template <class T, class D, size_t mt, size_t mp>
+    hazard_manager<T,D,mt,mp>::handle_type::handle_type(parent_type& parent,
                                                       internal_handle& internal,
                                                       int id)
         : n(0), _parent(parent), _internal(internal), _id(id)
     { }
 
-    template <class T, size_t mt, size_t mp>
-    hazard_manager<T,mt,mp>::handle_type::handle_type(handle_type&& source) noexcept
+    template <class T, class D, size_t mt, size_t mp>
+    hazard_manager<T,D,mt,mp>::handle_type::handle_type(handle_type&& source) noexcept
         : _parent(source._parent), _internal(source._internal), _id(source._id)
     {
         source._id = -1;
     }
 
-    template <class T, size_t mt, size_t mp>
-    typename hazard_manager<T,mt,mp>::handle_type&
-    hazard_manager<T,mt,mp>::handle_type::operator=(handle_type&& source) noexcept
+    template <class T, class D, size_t mt, size_t mp>
+    typename hazard_manager<T,D,mt,mp>::handle_type&
+    hazard_manager<T,D,mt,mp>::handle_type::operator=(handle_type&& source) noexcept
     {
         if (&source == this) return *this;
         this->handle_type::~handle_type();
@@ -358,8 +365,8 @@ namespace reclamation_tm
         return *this;
     }
 
-    template <class T, size_t mt, size_t mp>
-    hazard_manager<T,mt,mp>::handle_type::~handle_type()
+    template <class T, class D, size_t mt, size_t mp>
+    hazard_manager<T,D,mt,mp>::handle_type::~handle_type()
     {
         if (_id < 0) return;
 
@@ -377,14 +384,14 @@ namespace reclamation_tm
 
 
     // ***** HANDLE FUNCTIONALITY **********************************************
-    template <class T, size_t mt, size_t mp> template <class ... Args>
-    T* hazard_manager<T,mt,mp>::handle_type::create_pointer(Args&& ... args) const
+    template <class T, class D, size_t mt, size_t mp> template <class ... Args>
+    T* hazard_manager<T,D,mt,mp>::handle_type::create_pointer(Args&& ... args) const
     {
         return new T(std::forward<Args>(args)...);
     }
 
-    template <class T, size_t mt, size_t mp>
-    T* hazard_manager<T,mt,mp>::handle_type::protect(atomic_pointer_type& ptr)
+    template <class T, class D, size_t mt, size_t mp>
+    T* hazard_manager<T,D,mt,mp>::handle_type::protect(atomic_pointer_type& ptr)
     {
         ++n;
         auto temp0 = ptr.load();
@@ -401,15 +408,15 @@ namespace reclamation_tm
         return temp1;
     }
 
-    template <class T, size_t mt, size_t mp>
-    void hazard_manager<T,mt,mp>::handle_type::protect_raw(pointer_type ptr)
+    template <class T, class D, size_t mt, size_t mp>
+    void hazard_manager<T,D,mt,mp>::handle_type::protect_raw(pointer_type ptr)
     {
         ++n;
         _internal.insert(mark::clear(ptr));
     }
 
-    template <class T, size_t mt, size_t mp>
-    void hazard_manager<T,mt,mp>::handle_type::unprotect(pointer_type ptr)
+    template <class T, class D, size_t mt, size_t mp>
+    void hazard_manager<T,D,mt,mp>::handle_type::unprotect(pointer_type ptr)
     {
         --n;
         auto cptr = mark::clear(ptr);
@@ -425,8 +432,8 @@ namespace reclamation_tm
             continue_deletion(cptr, pos);
     }
 
-    template <class T, size_t mt, size_t mp>
-    void hazard_manager<T,mt,mp>::handle_type::unprotect(std::vector<pointer_type>& vec)
+    template <class T, class D, size_t mt, size_t mp>
+    void hazard_manager<T,D,mt,mp>::handle_type::unprotect(std::vector<pointer_type>& vec)
     {
         for (auto ptr : vec)
         {
@@ -434,20 +441,20 @@ namespace reclamation_tm
         }
     }
 
-    template <class T, size_t mt, size_t mp>
-    void hazard_manager<T,mt,mp>::handle_type::safe_delete(pointer_type ptr)
+    template <class T, class D, size_t mt, size_t mp>
+    void hazard_manager<T,D,mt,mp>::handle_type::safe_delete(pointer_type ptr)
     {
         continue_deletion(ptr);
     }
 
-    template <class T, size_t mt, size_t mp>
-    void hazard_manager<T,mt,mp>::handle_type::delete_raw(pointer_type ptr)
+    template <class T, class D, size_t mt, size_t mp>
+    void hazard_manager<T,D,mt,mp>::handle_type::delete_raw(pointer_type ptr)
     {
         delete mark::clear(ptr);
     }
 
-    template <class T, size_t mt, size_t mp>
-    bool hazard_manager<T,mt,mp>::handle_type::is_safe(pointer_type ptr)
+    template <class T, class D, size_t mt, size_t mp>
+    bool hazard_manager<T,D,mt,mp>::handle_type::is_safe(pointer_type ptr)
     {
         auto cptr = mark::clear(ptr);
         for (int i = _parent._handle_counter.load(); i >= 0; --i)
@@ -461,8 +468,8 @@ namespace reclamation_tm
     }
 
     // ***** HANDLE HELPER FUNCTION ********************************************
-    template <class T, size_t mt, size_t mp>
-    void hazard_manager<T,mt,mp>::handle_type::continue_deletion(
+    template <class T, class D, size_t mt, size_t mp>
+    void hazard_manager<T,D,mt,mp>::handle_type::continue_deletion(
         pointer_type ptr,
         int pos)
     {
@@ -476,11 +483,11 @@ namespace reclamation_tm
             if (temp_handle->mark(ptr) != istate::NOT_FOUND) return;
         }
 
-        delete ptr;
+        _parent._destructor.destroy(*this, ptr);
     }
 
-    template <class T, size_t mt, size_t mp>
-    void hazard_manager<T,mt,mp>::handle_type::print() const
+    template <class T, class D, size_t mt, size_t mp>
+    void hazard_manager<T,D,mt,mp>::handle_type::print() const
     {
         out_tm::out() << "* print in hazard reclamation handle "
                       << _internal._counter.load()
