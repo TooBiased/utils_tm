@@ -74,7 +74,7 @@ namespace debug_tm{
             {
                 dout() << out_tm::color::red    << str
                        << out_tm::color::reset  << std::endl;
-                #ifndef NO_EXCEPT
+                #ifdef NO_EXCEPT
                 exit(error_code);
                 #else
                 throw std::runtime_error(str);

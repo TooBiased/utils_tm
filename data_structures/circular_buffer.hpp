@@ -131,7 +131,7 @@ circular_buffer<T>& circular_buffer<T>::operator=(circular_buffer&& other)
     if (&other == this) return *this;
 
     this->~this_type();
-    new (this) circular_buffer(other);
+    new (this) circular_buffer(std::move(other));
     return *this;
 }
 
