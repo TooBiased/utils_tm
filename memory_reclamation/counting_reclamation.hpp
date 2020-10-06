@@ -11,6 +11,7 @@
 #include "../debug.hpp"
 
 #include "default_destructor.hpp"
+#include "reclamation_guard.hpp"
 
 namespace utils_tm
 {
@@ -75,6 +76,7 @@ namespace reclamation_tm
         public:
             using pointer_type        = typename parent_type::pointer_type;
             using atomic_pointer_type = typename parent_type::atomic_pointer_type;
+            using guard_type          = reclamation_guard<T, this_type>;
 
             handle_type(parent_type& parent) : n(0), _parent(parent) { }
             handle_type(const handle_type&) = delete;
@@ -95,6 +97,8 @@ namespace reclamation_tm
             inline void protect_raw(pointer_type ptr);
             inline void unprotect(pointer_type ptr);
             inline void unprotect(std::vector<pointer_type>& vec);
+            inline guard_type guard(atomic_pointer_type& ptr);
+            inline guard_type guard(pointer_type ptr);
 
             inline void safe_delete(pointer_type ptr);
             inline void delete_raw(pointer_type ptr);
@@ -199,6 +203,20 @@ namespace reclamation_tm
         n -= vec.size();
         for (auto ptr : vec)
             decrement_counter(ptr);
+    }
+
+    template<class T, class D, template <class> class Q, class CO>
+    typename counting_manager<T,D,Q,CO>::handle_type::guard_type
+    counting_manager<T,D,Q,CO>::handle_type::guard(atomic_pointer_type& aptr)
+    {
+        return make_rec_guard(*this, aptr);
+    }
+
+    template<class T, class D, template <class> class Q, class CO>
+    typename counting_manager<T,D,Q,CO>::handle_type::guard_type
+    counting_manager<T,D,Q,CO>::handle_type::guard(pointer_type ptr)
+    {
+        return make_rec_guard(*this, ptr);
     }
 
     template<class T, class D, template <class> class Q, class CO>

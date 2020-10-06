@@ -6,10 +6,12 @@
 #include "thread_coordination.hpp"
 #include "pin_thread.hpp"
 #include "command_line_parser.hpp"
+#include "memory_reclamation/reclamation_guard.hpp"
 
 namespace utm = utils_tm;
 namespace otm = utm::out_tm;
 namespace ttm = utm::thread_tm;
+namespace rtm = utm::reclamation_tm;
 using c   = otm::color;
 using w   = otm::width;
 
@@ -75,8 +77,6 @@ std::atomic_int foo::deleted = -1;
 #include "memory_reclamation/hazard_reclamation.hpp"
 // This would fail #include "memory_reclamation/sequential_reclamation.hpp"
 
-namespace rtm = utils_tm::reclamation_tm;
-
 alignas (64) static std::atomic<foo*>          the_one;
 alignas (64) static std::atomic_bool           finished{false};
 
@@ -105,33 +105,34 @@ struct test<ReclManager, ttm::timed_main_thread>
         thrd.synchronized(
             [it, n, &handle] ()
             {
-                auto current = handle.protect(the_one);
+                auto current = handle.guard(the_one);
+
                 for (size_t i = 1; i <= it; ++i)
                 {
                     while (current->counter.load() < n)
                     { /* wait */ }
 
-                    auto next = handle.create_pointer(i);
-                    handle.protect_raw(next);
+                    auto next = handle.guard(handle.create_pointer(i));
 
-                    //auto out = otm::buffered_out();
                     otm::buffered_out() << c::bgreen << "NEW    " << c::reset
-                                        << w(3) << i
-                                        << "    prev " << current
-                                        << " new "     << next << std::endl;
+                        << w(3) << i
+                        << "    prev " << static_cast<foo*>(current)
+                        << " new "     << static_cast<foo*>(next) << std::endl;
 
-                    if (! the_one.compare_exchange_strong(current, next))
+                    foo* cas_temp = current;
+                    if (! the_one.compare_exchange_strong(cas_temp, next))
                         otm::out() << "Error: on changing the pointer\n"
                                    << std::flush;
-                    handle.unprotect(current);
                     handle.safe_delete(current);
-                    current = next;
+                    current = std::move(next);
                 }
+
                 finished.store(true);
-                if (! the_one.compare_exchange_strong(current,nullptr))
+                foo* cas_temp = current;
+                if (! the_one.compare_exchange_strong(cas_temp,nullptr))
                     otm::out() << "Error: on changing ghe pointer to nullptr\n"
                                << std::flush;
-                handle.unprotect(current);
+
                 handle.safe_delete(current);
                 return 0;
             });
@@ -156,11 +157,10 @@ struct test<ReclManager, ttm::untimed_sub_thread>
             {
                 while (!finished.load())
                 {
-                    auto current = handle.protect(the_one);
+                    auto current = handle.guard(the_one);
                     if (!current) continue;
                     for (size_t i = 0; i < 100; ++i)
                         current->counter.fetch_add(1);
-                    handle.unprotect(current);
                 }
                 return 0;
             });

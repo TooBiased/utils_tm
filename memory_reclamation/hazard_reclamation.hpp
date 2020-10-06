@@ -9,6 +9,7 @@
 #include "../debug.hpp"
 
 #include "default_destructor.hpp"
+#include "reclamation_guard.hpp"
 
 namespace utils_tm
 {
@@ -79,6 +80,7 @@ namespace reclamation_tm
         public:
             using pointer_type        = typename parent_type::pointer_type;
             using atomic_pointer_type = typename parent_type::atomic_pointer_type;
+            using guard_type          = reclamation_guard<T,this_type>;
 
             handle_type(parent_type& parent, internal_handle& internal, int id);
             handle_type(const handle_type&) = delete;
@@ -97,9 +99,13 @@ namespace reclamation_tm
             inline void unprotect(pointer_type ptr);
             inline void unprotect(std::vector<T*>& vec);
 
+            inline guard_type guard(atomic_pointer_type& ptr);
+            inline guard_type guard(pointer_type ptr);
+
             inline void safe_delete(pointer_type ptr);
             inline void delete_raw(pointer_type ptr);
             inline bool is_safe(pointer_type ptr);
+
 
 
             void print() const;
@@ -439,6 +445,20 @@ namespace reclamation_tm
         {
             unprotect(ptr);
         }
+    }
+
+    template <class T, class D, size_t mt, size_t mp>
+    typename hazard_manager<T,D,mt,mp>::handle_type::guard_type
+    hazard_manager<T,D,mt,mp>::handle_type::guard(atomic_pointer_type& aptr)
+    {
+        return make_rec_guard(*this, aptr);
+    }
+
+    template <class T, class D, size_t mt, size_t mp>
+    typename hazard_manager<T,D,mt,mp>::handle_type::guard_type
+    hazard_manager<T,D,mt,mp>::handle_type::guard(pointer_type aptr)
+    {
+        return make_rec_guard(*this, aptr);
     }
 
     template <class T, class D, size_t mt, size_t mp>

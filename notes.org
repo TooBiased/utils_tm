@@ -1,5 +1,9 @@
 * Tasks
 
+** TODO implement the delayed reclamation with nonstandard destructors
+   [2020-10-06 Tue 18:53]
+   [[file:~/IMP/utils/memory_reclamation/delayed_reclamation.hpp::inline%20guard_type%20guard(pointer_type%20ptr);]]
+
 ** TODO implement the remove in queue
    [2020-03-20 Fr 22:14]
    [[file:~/IMP/utils/data_structures/concurrent_singly_linked_list.hpp][file:~/IMP/utils/data_structures/concurrent_singly_linked_list.hpp]]
