@@ -262,8 +262,8 @@ std::string hex_print (int_type t)
 
     while (shift > 0)
     {
-        buffer << table[(t>>shift)   & 15]
-               << table[(t>>shift-4) & 15]
+        buffer << table[(t>> shift)    & 15]
+               << table[(t>>(shift-4)) & 15]
                << " ";
         shift -= 8;
     }
