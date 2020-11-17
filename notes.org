@@ -1,5 +1,14 @@
 * Tasks
 
+** TODO implement the concurrent arraylist idea, that I had for Markus Iser
+basic idea:
+- append only container
+- only accessable via iterating through it
+- singly linked list of blocks
+- each position is stored in one 64bit value
+  - upper 48bits = pointer to current block
+  - lower 16bits = offset within the current block
+
 ** TODO implement the delayed reclamation with nonstandard destructors
    [2020-10-06 Tue 18:53]
    [[file:~/IMP/utils/memory_reclamation/delayed_reclamation.hpp::inline%20guard_type%20guard(pointer_type%20ptr);]]

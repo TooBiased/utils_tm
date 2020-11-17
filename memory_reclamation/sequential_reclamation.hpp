@@ -7,6 +7,8 @@
 #include "../mark_pointer.hpp"
 #include "../output.hpp"
 
+#include "reclamation_guard.hpp"
+
 namespace utils_tm
 {
 namespace reclamation_tm
@@ -82,6 +84,7 @@ namespace reclamation_tm
         public:
             using pointer_type        = typename parent_type::pointer_type;
             using atomic_pointer_type = typename parent_type::atomic_pointer_type;
+            using guard_type          = reclamation_guard<T,this_type>;
 
             handle_type() = default;
             handle_type(const handle_type&) = delete;
@@ -94,7 +97,7 @@ namespace reclamation_tm
             template <class ... Args>
             inline T*   create_pointer(Args&& ... arg) const;
 
-            inline T*   protect(atomic_pointer_type& ptr) const;
+            inline T*   protect(atomic_pointer_type& aptr) const;
             inline void safe_delete(pointer_type ptr) const;
 
             inline void protect_raw(pointer_type ptr) const;
@@ -103,6 +106,8 @@ namespace reclamation_tm
 
             inline void unprotect(pointer_type ptr) const;
             inline void unprotect(std::vector<T*>& vec) const;
+            inline guard_type guard(atomic_pointer_type& aptr);
+            inline guard_type guard(pointer_type ptr);
 
             void print() const;
 
@@ -121,9 +126,9 @@ namespace reclamation_tm
     }
 
     template <class T>
-    T* sequential_manager<T>::handle_type::protect(atomic_pointer_type& ptr) const
+    T* sequential_manager<T>::handle_type::protect(atomic_pointer_type& aptr) const
     {
-        return ptr.load();
+        return aptr.load();
     }
 
     template <class T>
@@ -162,6 +167,21 @@ namespace reclamation_tm
     void sequential_manager<T>::handle_type::unprotect(std::vector<pointer_type>&) const
     {
         return;
+    }
+
+
+    template <class T>
+    typename sequential_manager<T>::handle_type::guard_type
+    sequential_manager<T>::handle_type::guard(atomic_pointer_type& aptr)
+    {
+        return guard_type(*this, aptr);
+    }
+
+    template <class T>
+    typename sequential_manager<T>::handle_type::guard_type
+    sequential_manager<T>::handle_type::guard(pointer_type ptr)
+    {
+        return guard_type(*this, ptr);
     }
 
 
