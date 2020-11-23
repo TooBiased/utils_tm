@@ -71,6 +71,8 @@ namespace utils_tm
         inline void push (const T& element);
         inline void push(queue_item_type* item);
 
+        size_t size() const;
+
         inline       iterator_type  begin();
         inline const_iterator_type  begin() const;
         inline const_iterator_type cbegin() const;
@@ -140,6 +142,19 @@ namespace utils_tm
         while (!_head.compare_exchange_weak(temp, item,
                                             std::memory_order_acq_rel));
     }
+
+    template <class T>
+    size_t
+    concurrent_singly_linked_list<T>::size() const
+    {
+        auto result = 0;
+        for ([[maybe_unused]] const auto& e : *this)
+        {
+            ++result;
+        }
+        return result;
+    }
+
 
 
     // ITERATOR STUFF

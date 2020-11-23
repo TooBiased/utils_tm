@@ -57,6 +57,12 @@ struct test
                 return 0;
             });
 
+            if (thrd.is_main && queue.size() != thrd.p*n)
+            {
+                thrd.out << "Unexpected Size " << queue.size()
+                         << "(expected " <<  thrd.p*n << ")" << std::endl;
+                errors.fetch_add(1);
+            }
 
             if (!errors.load())
             {
