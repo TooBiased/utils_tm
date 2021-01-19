@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string_view>
+#include <string>
 
 // this define ensures, that xxhash is inlined/does not create new compile unit
 #define XXH_PRIVATE_API
@@ -24,6 +25,11 @@ struct xx_hash
     {
         auto local = k;
         return XXH64 (&local, 8, seed);
+    }
+
+    inline uint64_t operator()(const std::string& k) const
+    {
+        return XXH64 (k.data(), k.size(), seed);
     }
 };
 

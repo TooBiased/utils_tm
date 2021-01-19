@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <string_view>
+#include <string>
 
 
 namespace utils_tm {
@@ -26,6 +27,10 @@ struct crc_hash
         return uint64_t(   __builtin_ia32_crc32di(k, seed0)
                         | (__builtin_ia32_crc32di(k, seed1) << 32));
     }
+
+    // string keys are not implemented for our crc-based hash function
+    inline uint64_t operator()(const std::string& k) const;
+
 };
 
 }

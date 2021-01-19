@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <string_view>
+#include <string>
 
 
 namespace utils_tm {
@@ -65,6 +66,11 @@ struct murmur2_hash
     {
         auto local = k;
         return MurmurHash64A(&local, 8, seed);
+    }
+
+    inline uint64_t operator()(const std::string& k) const
+    {
+        return MurmurHash64A(k.data(), k.size(), seed);
     }
 };
 

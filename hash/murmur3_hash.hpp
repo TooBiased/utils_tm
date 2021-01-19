@@ -2,6 +2,7 @@
 
 
 #include <string_view>
+#include <string>
 
 // We include the cpp to avoid generating another compile unit
 #include "MurmurHash3.cpp"
@@ -29,6 +30,12 @@ struct murmur3_hash
         MurmurHash3_x64_128 (&local, 8, seed, target);
 
         return target[0];
+    }
+
+    inline uint64_t operator()(const std::string& k) const
+    {
+        uint64_t target[2];
+        return MurmurHash3_x64_128 (k.data(), k.size(), seed, target);
     }
 };
 
