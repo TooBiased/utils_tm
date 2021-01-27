@@ -67,14 +67,6 @@ public:
     void disable()
     {
         cleanup();
-        std::ofstream* fout = new std::ofstream(0);
-        if (fout->is_open())
-        {
-            std::cerr << "disabled stream is open" << std::endl;
-        }
-
-        _is_fstream = true;
-        _outstream  = fout;
     }
 
 
@@ -94,6 +86,8 @@ private:
             if (fout->is_open()) fout->close();
             delete fout;
         }
+        _is_fstream = false;
+        _outstream = nullptr;
     }
 };
 
@@ -103,6 +97,7 @@ private:
 template<typename T>
 inline output_type& operator<<(output_type& cons, T&& t)
 {
+    if (! cons._outstream) return cons;
     *(cons._outstream) << std::forward<T>(t);
     return cons;
 }
@@ -111,6 +106,7 @@ inline output_type& operator<<(output_type& cons, T&& t)
 // using omanip_t = std::ostream& (*) (std::ostream &);
 inline output_type& operator<<(output_type& cons, manipulator_type t)
 {
+    if (! cons._outstream) return cons;
     *(cons._outstream) << t;
     return cons;
 }
