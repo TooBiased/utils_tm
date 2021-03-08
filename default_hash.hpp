@@ -21,7 +21,8 @@
 #if (! (defined(CRC)     || \
         defined(MURMUR2) || \
         defined(MURMUR3) || \
-        defined(XXHASH)) )
+        defined(XXHASH)  || \
+        defined(XXH3)) )
 #define MURMUR2
 #endif // NO HASH DEFINED
 
@@ -58,7 +59,6 @@ namespace hash_tm {
 #endif // MURMUR3
 
 
-
 #ifdef XXHASH
 #include "hash/xx_hash.hpp"
 #define HASHFCT utils_tm::hash_tm::xx_hash
@@ -68,3 +68,14 @@ namespace hash_tm {
 }
 }
 #endif // XXHASH
+
+
+#ifdef XXH3
+#include "hash/xx_hash.hpp"
+#define HASHFCT utils_tm::hash_tm::xx_h3
+namespace utils_tm {
+namespace hash_tm {
+    using default_hash = xx_h3;
+}
+}
+#endif // XXH3
