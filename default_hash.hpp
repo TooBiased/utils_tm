@@ -71,7 +71,7 @@ namespace hash_tm {
 
 
 #ifdef XXH3
-#include "hash/xx_hash.hpp"
+#include "hash/xx_h3.hpp"
 #define HASHFCT utils_tm::hash_tm::xx_h3
 namespace utils_tm {
 namespace hash_tm {
