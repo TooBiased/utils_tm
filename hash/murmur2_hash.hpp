@@ -68,7 +68,9 @@ struct murmur2_hash
         return MurmurHash64A(&local, 8, seed);
     }
 
-    inline uint64_t operator()(const std::string& k) const
+    // targeted at string type classes i.e. data pointer + size
+    template <class Type>
+    inline uint64_t operator()(const Type& k) const
     {
         return MurmurHash64A(k.data(), k.size(), seed);
     }

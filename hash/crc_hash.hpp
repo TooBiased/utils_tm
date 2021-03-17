@@ -29,7 +29,8 @@ struct crc_hash
     }
 
     // string keys are not implemented for our crc-based hash function
-    inline uint64_t operator()(const std::string& k) const;
+    template <class Type>
+    inline uint64_t operator()(const Type& k) const;
 
 };
 

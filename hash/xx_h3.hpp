@@ -27,7 +27,9 @@ struct xx_h3
         return XXH3_64bits_withSeed(&local, 8, seed);
     }
 
-    inline uint64_t operator()(const std::string& k) const
+    // targeted at string type classes i.e. data pointer + size
+    template <class Type>
+    inline uint64_t operator()(const Type& k) const
     {
         return XXH3_64bits_withSeed(k.data(), k.size(), seed);
     }
