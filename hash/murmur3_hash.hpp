@@ -22,7 +22,7 @@ struct murmur3_hash
 
     uint seed;
 
-    inline uint64_t operator()(const uint64_t k) const
+    inline uint64_t operator()(const uint64_t& k) const
     {
         uint64_t local = k;
         uint64_t target[2];
@@ -37,7 +37,8 @@ struct murmur3_hash
     inline uint64_t operator()(const Type& k) const
     {
         uint64_t target[2];
-        return MurmurHash3_x64_128 (k.data(), k.size(), seed, target);
+        MurmurHash3_x64_128 (k.data(), k.size(), seed, target);
+        return target[0];
     }
 };
 
