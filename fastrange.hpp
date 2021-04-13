@@ -5,6 +5,9 @@
 
 #include <stdint.h>
 
+namespace utils_tm
+{
+
 inline uint32_t fastrange32(uint32_t cap, uint32_t in)
 {
     return (uint64_t(in) * uint64_t(cap)) >> 32;
@@ -22,4 +25,6 @@ inline uint64_t fastrange64(uint64_t cap, uint64_t in)
     static_assert (is_defined_128,
                    "128bit integers have to be defined for fastrange64");
     return (__uint128_t(in) * __uint128_t(cap)) >> 64;
+}
+
 }
