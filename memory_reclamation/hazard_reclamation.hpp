@@ -400,15 +400,16 @@ namespace reclamation_tm
     T* hazard_manager<T,D,mt,mp>::handle_type::protect(atomic_pointer_type& ptr)
     {
         ++n;
-        auto temp0 = ptr.load();
-        auto pos   = _internal.insert(mark::clear(temp0));
+        auto temp0 = mark::clear(ptr.load());
+        if (!temp0) return nullptr;
+        auto pos   = _internal.insert(temp0);
         auto temp1 = ptr.load();
-        while (mark::clear(temp0) != mark::clear(temp1))
+        while (temp0 != mark::clear(temp1))
         {
             auto state = _internal.replace(pos, mark::clear(temp1));
             if (state == istate::MARKED)
-                continue_deletion(mark::clear(temp0), pos);
-            temp0 = temp1;
+                continue_deletion(temp0, pos);
+            temp0 = mark::clear(temp1);
             temp1 = ptr.load();
         }
         return temp1;

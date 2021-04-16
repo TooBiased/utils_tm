@@ -170,6 +170,7 @@ namespace reclamation_tm
     {
         ++n;
         auto temp  = ptr.load();
+        if (!mark::clear(temp)) return nullptr; // nullptr cannot be protected
         increment_counter(temp);
         auto temp2 = ptr.load();
         while (temp != temp2)
