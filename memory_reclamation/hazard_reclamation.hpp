@@ -409,7 +409,15 @@ namespace reclamation_tm
             auto state = _internal.replace(pos, mark::clear(temp1));
             if (state == istate::MARKED)
                 continue_deletion(temp0, pos);
-            temp0 = mark::clear(temp1);
+            temp1 = mark::clear(temp1);
+            if (!temp1)
+            {
+                // - the previous pointer is overwritten with nullptr
+                // - we just have to decrement the counter
+                _internal._counter.fetch_sub(1);
+                return nullptr;
+            }
+            temp0 = temp1;
             temp1 = ptr.load();
         }
         return temp1;

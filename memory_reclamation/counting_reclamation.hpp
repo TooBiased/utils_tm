@@ -177,6 +177,7 @@ namespace reclamation_tm
         {
             decrement_counter(temp);
             temp = temp2;
+            if (!mark::clear(temp)) return nullptr;
             increment_counter(temp);
             temp2 = ptr.load();
         }
