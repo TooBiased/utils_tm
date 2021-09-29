@@ -92,5 +92,5 @@ reclamation_guard<T,R>::~reclamation_guard()
         return reclamation_guard<T,ReclamationType>(rec, aptr);
     }
 
-};
-};
+}
+}
