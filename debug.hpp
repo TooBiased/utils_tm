@@ -42,7 +42,7 @@ namespace debug_tm{
         constexpr bool verbose_mode = false;
     #endif
 
-    out_tm::output_type& dout()
+    inline out_tm::output_type& dout()
     {
         static out_tm::output_type static_dout;
         return static_dout;
