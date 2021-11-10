@@ -249,12 +249,12 @@ inline int start_threads(size_t p, Types&& ... param)
     {
         local_thread[i] = std::thread(Functor<untimed_sub_thread>::execute,
                                       untimed_sub_thread(p, i+1),
-                                      std::ref(std::forward<Types>(param))...);
+                                      std::ref(param)...);
     }
 
     // int temp =0;
     int temp = Functor<timed_main_thread>::execute(timed_main_thread(p, 0),
-                                                 std::forward<Types>(param)...);
+                                                   param...);
 
     // CLEANUP THREADS
     for (size_t i = 0; i < p-1; ++i)
