@@ -13,5 +13,5 @@ namespace reclamation_tm {
             h.delete_raw(ptr);
         }
     };
-};
-};
+}
+}

@@ -113,7 +113,7 @@ inline output_type& operator<<(output_type& cons, manipulator_type t)
 
 
 // THE STATIC OUTPUT OBJECT (THIS REPLACES std::cout) **************************
-output_type& out()
+inline output_type& out()
 {
     static output_type static_out;
     return static_out;
@@ -167,7 +167,7 @@ inline locally_buffered_output<O>& operator<<(locally_buffered_output<O>& lbo,
 }
 
 
-locally_buffered_output<output_type>& buffered_out()
+inline locally_buffered_output<output_type>& buffered_out()
 {
     static thread_local locally_buffered_output<output_type> local_out(out());
     return local_out;

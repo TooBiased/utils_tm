@@ -106,5 +106,5 @@ namespace mark {
         return bool(size_t(ptr) & (~lower<15>()));
     }
 
-}; // namespace mark
-}; // namespace utils_tm
+} // namespace mark
+} // namespace utils_tm
