@@ -10,7 +10,7 @@ namespace utm = utils_tm;
 namespace otm = utils_tm::out_tm;
 namespace ttm = utils_tm::thread_tm;
 
-using queue_type = utils_tm::concurrent_singly_linked_list<std::pair<size_t, size_t>>;
+using queue_type = utm::concurrent_singly_linked_list<std::pair<size_t, size_t>>;
 alignas(64) static queue_type         queue;
 alignas(64) static std::atomic_size_t errors;
 

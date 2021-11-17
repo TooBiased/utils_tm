@@ -10,7 +10,7 @@ namespace utm = utils_tm;
 namespace otm = utils_tm::out_tm;
 namespace ttm = utils_tm::thread_tm;
 
-alignas(64) static many_producer_single_consumer_buffer<size_t> buffer{0};
+alignas(64) static utm::many_producer_single_consumer_buffer<size_t> buffer{0};
 
 template <class ThreadType>
 struct test;
@@ -47,7 +47,7 @@ struct test<ttm::timed_main_thread>
                 size_t n, size_t bsize)
     {
         utm::pin_to_core(thrd.id);
-        buffer = many_producer_single_consumer_buffer<size_t>{bsize};
+        buffer = utm::many_producer_single_consumer_buffer<size_t>{bsize};
         size_t* counter = new size_t[n+1];
         std::fill(counter, counter+n, 0);
 

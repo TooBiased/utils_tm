@@ -524,5 +524,5 @@ namespace reclamation_tm
                       << std::endl;
     }
 
-};
-};
+}
+}

@@ -44,7 +44,7 @@ void run_test(size_t n, size_t c, size_t w)
     input.reserve(n);
     generate_random(n, input);
 
-    circular_buffer<T> container{c};
+    utm::circular_buffer<T> container{c};
     size_t trailing_index = 0;
     bool noerror = true;
 
