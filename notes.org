@@ -1,5 +1,9 @@
 * Tasks
 
+** TODO use allocators in circular buffer
+   [2021-11-17 Mi 11:14]
+   [[file:~/IMP/utils/data_structures/circular_buffer.hpp::template%20<class%20T>]]
+
 ** TODO implement the concurrent arraylist idea, that I had for Markus Iser
 basic idea:
 - append only container

@@ -1,3 +1,4 @@
+
 #pragma once
 
 #include <algorithm>
@@ -12,7 +13,6 @@ class circular_buffer
 {
 private:
     using this_type = circular_buffer<T>;
-
 
     size_t _start;
     size_t _end;
@@ -38,7 +38,6 @@ public:
 
     inline std::optional<T> pop_back();
     inline std::optional<T> pop_front();
-
 
     size_t size()     const;
     size_t capacity() const;
@@ -96,8 +95,8 @@ public:
 
 private:
     inline size_t mod(size_t i)                const { return i & _bitmask; }
-    inline size_t inc(size_t i, size_t diff=1) const { return mod(i+diff); }
-    inline size_t dec(size_t i, size_t diff=1) const { return mod(i-diff); }
+    inline size_t inc(size_t i, size_t diff=1) const { return i+diff; }
+    inline size_t dec(size_t i, size_t diff=1) const { return i-diff; }
 
     inline size_t compare_offsets(size_t lhs, size_t rhs) const;
 
@@ -152,38 +151,38 @@ template <class T>
 void circular_buffer<T>::push_back(const T& e)
 {
 
-    if (_start == inc(_end)) grow();
+    if (_end > _start+_bitmask) grow();
 
-    _buffer[_end] = e;
+    _buffer[mod(_end)] = e;
     _end = inc(_end);
 }
 
 template <class T>
 void circular_buffer<T>::push_front(const T& e)
 {
-    if (dec(_start) == _end) grow();
+    if (_end > _start+_bitmask) grow();
 
     _start = dec(_start);
-    _buffer[_start] = e;
+    _buffer[mod(_start)] = e;
 }
 
 template <class T> template <class ... Args>
 void circular_buffer<T>::emplace_back(Args&& ... args)
 {
 
-    if (_start == inc(_end)) grow();
+    if (_end > _start+_bitmask) grow();
 
-    new (& _buffer[_end]) T(std::forward<Args>(args)...);
+    new (& _buffer[mod(_end)]) T(std::forward<Args>(args)...);
     _end = inc(_end);
 }
 
 template <class T> template <class ... Args>
 void circular_buffer<T>::emplace_front(Args&& ... args)
 {
-    if (dec(_start) == _end) grow();
+    if (_end > _start+_bitmask) grow();
 
     _start = dec(_start);
-    new (& _buffer[_start]) T(std::forward<Args>(args)...);
+    new (& _buffer[mod(_start)]) T(std::forward<Args>(args)...);
 }
 
 template <class T>
@@ -193,8 +192,8 @@ std::optional<T> circular_buffer<T>::pop_back()
     { return {}; }
 
     _end = dec(_end);
-    auto result = std::make_optional(std::move(_buffer[_end]));
-    _buffer[_end].~T();
+    auto result = std::make_optional(std::move(_buffer[mod(_end)]));
+    _buffer[mod(_end)].~T();
     return result;
 }
 
@@ -204,8 +203,8 @@ std::optional<T> circular_buffer<T>::pop_front()
     if (_start == _end)
     { return {}; }
 
-    auto result = std::make_optional(std::move(_buffer[_start]));
-    _buffer[_start].~T();
+    auto result = std::make_optional(std::move(_buffer[mod(_start)]));
+    _buffer[mod(_start)].~T();
     _start = inc(_start);
     return result;
 }
@@ -215,7 +214,6 @@ std::optional<T> circular_buffer<T>::pop_front()
 template <class T>
 size_t circular_buffer<T>::size() const
 {
-    if (_start > _end) return _end + _bitmask + 1 - _start;
     return _end - _start;
 }
 
@@ -231,8 +229,6 @@ template <class T>
 size_t circular_buffer<T>::compare_offsets(size_t lhs, size_t rhs) const
 {
     if (lhs == rhs) return 0;
-    lhs += (lhs < _start) ? _bitmask + 1 : 0;
-    rhs += (rhs < _start) ? _bitmask + 1 : 0;
     return (lhs < rhs) ? -1 : 1;
 }
 
@@ -282,17 +278,17 @@ void circular_buffer<T>::cleanup()
 template <class T> template <bool b>
 typename circular_buffer<T>::template iterator_base<b>::reference
 circular_buffer<T>::iterator_base<b>::operator* () const
-{ return _circular->_buffer[_off]; }
+{ return _circular->_buffer[_circular->mod(_off)]; }
 
 template <class T> template <bool b>
 typename circular_buffer<T>::template iterator_base<b>::pointer
 circular_buffer<T>::iterator_base<b>::operator->() const
-{ return _circular->_buffer + _off; }
+{ return _circular->_buffer + _circular->mod(_off); }
 
 template <class T> template <bool b>
 typename circular_buffer<T>::template iterator_base<b>::reference
 circular_buffer<T>::iterator_base<b>::operator[](difference_type d) const
-{ return _circular->_buffer[_circular->inc(_off, d)]; }
+{ return _circular->_buffer[_circular->mod(_circular->inc(_off, d))]; }
 
 
 template <class T> template <bool b>

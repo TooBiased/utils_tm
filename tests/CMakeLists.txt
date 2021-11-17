@@ -1,48 +1,35 @@
-cmake_minimum_required (VERSION 2.8)
+cmake_minimum_required (VERSION 3.9)
 
 #### USER DEFINED ##############################################################
 
-project("utils_data_structure_test")
+project(utils-tests)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
 #### BASIC SETTINGS ############################################################
 
 include_directories(${PROJECT_SOURCE_DIR})
 
-set (CMAKE_CXX_FLAGS "-std=c++17 -Wall -Wextra -O3 -march=native -g -pthread -static-libstdc++ -Wno-parentheses -Wno-unused-but-set-parameter")
+set (CMAKE_CXX_FLAGS "-march=native -Wall -Wextra -O3")
+
+set(CMAKE_THREAD_PREFER_PTHREAD TRUE)
+set(THREADS_PREFER_PTHREAD_FLAG TRUE)
+find_package(Threads REQUIRED)
 
 #### FIND PACKAGES #############################################################
-
-find_package(Threads REQUIRED)
-set(LIBRARIES ${CMAKE_THREAD_LIBS_INIT})
-
-if (QFILTER_HASHFCT STREQUAL XXHASH)
-  message(STATUS "Looking for xxhash")
-
-  find_path(XXHASH_DIR xxHash/xxhash.h
-    PATHS ${CMAKE_CURRENT_SOURCE_DIR}/misc/)
-
-  if (XXHASH_DIR)
-    include_directories(${XXHASH_DIR}/xxHash)
-    message(STATUS "Looking for xxhash -- found")
-  else()
-    message(STATUS "Looking for xxhash -- not found")
-    message("Cannot find xxHash. Use MURMUR2 instead.")
-    set(QFILTER_HASHFCT MURMUR2)
-  endif()
-endif()
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/..)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
 
 #### MAKE TESTS ################################################################
 
-function( CompileTest sources name )
-  add_executable(${name} ${sources})
-  #target_compile_definitions(${name} PRIVATE -D ${variant} -D ${HASH_FCT})
-  target_link_libraries(${name} ${LIBRARIES})
-endfunction( CompileTest )
+add_executable( c_buffer_test src/test_circular_buffer.cpp)
 
-CompileTest( src/test_circular_buffer.cpp circular_buffer_test)
-CompileTest( src/test_many_producer_single_consumer_buffer.cpp many_producer_single_consumer_buffer_test)
-CompileTest( src/test_reclamation_strategies.cpp reclamation_test)
-CompileTest( src/test_singly_linked_list.cpp slinked_list_test)
+add_executable( mpsc_buffer_test src/test_many_producer_single_consumer_buffer.cpp)
+target_link_libraries(mpsc_buffer_test PRIVATE Threads::Threads)
+
+add_executable( rec_test src/test_reclamation_strategies.cpp)
+target_link_libraries(rec_test PRIVATE Threads::Threads)
+
+add_executable( slinked_list_test src/test_singly_linked_list.cpp)
+target_link_libraries(slinked_list_test PRIVATE Threads::Threads)

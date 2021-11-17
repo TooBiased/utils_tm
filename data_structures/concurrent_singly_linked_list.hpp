@@ -1,6 +1,7 @@
 #pragma once
 
-#include "../memory_reclamation/delayed_reclamation.hpp"
+#include <atomic>
+#include <iterator>
 
 namespace utils_tm
 {
@@ -70,6 +71,9 @@ namespace utils_tm
         inline void emplace(Args&& ... args);
         inline void push (const T& element);
         inline void push(queue_item_type* item);
+
+        iterator_type find(const T& element);
+        bool          contains(const T& element);
 
         size_t size() const;
 
@@ -141,6 +145,22 @@ namespace utils_tm
         }
         while (!_head.compare_exchange_weak(temp, item,
                                             std::memory_order_acq_rel));
+    }
+
+
+
+    template <class T>
+    typename concurrent_singly_linked_list<T>::iterator_type
+    concurrent_singly_linked_list<T>::find(const T& element)
+    {
+        return std::find(begin(), end(), element);
+    }
+
+    template <class T>
+    bool
+    concurrent_singly_linked_list<T>::contains(const T& element)
+    {
+        return find(element) != end();
     }
 
     template <class T>
@@ -215,4 +235,4 @@ namespace utils_tm
     bool
     concurrent_singly_linked_list<T>::iterator_base<c>::operator!=(const iterator_base& other) const
     { return _ptr != other._ptr; }
-};
+}
