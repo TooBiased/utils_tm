@@ -93,11 +93,11 @@ namespace reclamation_tm
             template <class ...Args>
             inline T*   create_pointer(Args&& ...arg) const;
 
-            inline T*   protect(atomic_pointer_type& ptr);
+            inline T*   protect(const atomic_pointer_type& ptr);
             inline void protect_raw(pointer_type ptr);
             inline void unprotect(pointer_type ptr);
             inline void unprotect(std::vector<pointer_type>& vec);
-            inline guard_type guard(atomic_pointer_type& ptr);
+            inline guard_type guard(const atomic_pointer_type& ptr);
             inline guard_type guard(pointer_type ptr);
 
             inline void safe_delete(pointer_type ptr);
@@ -166,7 +166,7 @@ namespace reclamation_tm
     }
 
     template<class T, class D, template <class> class Q, class CO>
-    T* counting_manager<T,D,Q,CO>::handle_type::protect(atomic_pointer_type& ptr)
+    T* counting_manager<T,D,Q,CO>::handle_type::protect(const atomic_pointer_type& ptr)
     {
         ++n;
         auto temp  = ptr.load();
@@ -209,7 +209,7 @@ namespace reclamation_tm
 
     template<class T, class D, template <class> class Q, class CO>
     typename counting_manager<T,D,Q,CO>::handle_type::guard_type
-    counting_manager<T,D,Q,CO>::handle_type::guard(atomic_pointer_type& aptr)
+    counting_manager<T,D,Q,CO>::handle_type::guard(const atomic_pointer_type& aptr)
     {
         return make_rec_guard(*this, aptr);
     }

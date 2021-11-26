@@ -69,7 +69,7 @@ namespace utils_tm
 
         template <class ... Args>
         inline void emplace(Args&& ... args);
-        inline void push (const T& element);
+        inline void push(const T& element);
         inline void push(queue_item_type* item);
 
         iterator_type find(const T& element);

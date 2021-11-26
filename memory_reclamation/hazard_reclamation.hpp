@@ -93,13 +93,13 @@ namespace reclamation_tm
             template <class ... Args>
             inline T*   create_pointer(Args&& ... args) const;
 
-            inline T*   protect(atomic_pointer_type& ptr);
+            inline T*   protect(const atomic_pointer_type& ptr);
             inline void protect_raw(pointer_type ptr);
 
             inline void unprotect(pointer_type ptr);
             inline void unprotect(std::vector<T*>& vec);
 
-            inline guard_type guard(atomic_pointer_type& ptr);
+            inline guard_type guard(const atomic_pointer_type& ptr);
             inline guard_type guard(pointer_type ptr);
 
             inline void safe_delete(pointer_type ptr);
@@ -119,6 +119,7 @@ namespace reclamation_tm
             int              _id;
         };
         friend handle_type;
+        using guard_type = typename handle_type::guard_type;
 
         handle_type get_handle();
         void print() const;
@@ -397,11 +398,12 @@ namespace reclamation_tm
     }
 
     template <class T, class D, size_t mt, size_t mp>
-    T* hazard_manager<T,D,mt,mp>::handle_type::protect(atomic_pointer_type& ptr)
+    T* hazard_manager<T,D,mt,mp>::handle_type::protect(const atomic_pointer_type& ptr)
     {
         ++n;
-        auto temp0 = mark::clear(ptr.load());
-        if (!temp0) return nullptr;
+        auto temp0 = ptr.load();
+        if (!mark::clear(temp0)) return temp0;
+        temp0 = mark::clear(temp0);
         auto pos   = _internal.insert(temp0);
         auto temp1 = ptr.load();
         while (temp0 != mark::clear(temp1))
@@ -458,7 +460,7 @@ namespace reclamation_tm
 
     template <class T, class D, size_t mt, size_t mp>
     typename hazard_manager<T,D,mt,mp>::handle_type::guard_type
-    hazard_manager<T,D,mt,mp>::handle_type::guard(atomic_pointer_type& aptr)
+    hazard_manager<T,D,mt,mp>::handle_type::guard(const atomic_pointer_type& aptr)
     {
         return make_rec_guard(*this, aptr);
     }

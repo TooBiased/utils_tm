@@ -97,7 +97,7 @@ namespace reclamation_tm
             template <class ... Args>
             inline T*   create_pointer(Args&& ... arg) const;
 
-            inline T*   protect(atomic_pointer_type& aptr) const;
+            inline T*   protect(const atomic_pointer_type& aptr) const;
             inline void safe_delete(pointer_type ptr) const;
 
             inline void protect_raw(pointer_type ptr) const;
@@ -106,7 +106,7 @@ namespace reclamation_tm
 
             inline void unprotect(pointer_type ptr) const;
             inline void unprotect(std::vector<T*>& vec) const;
-            inline guard_type guard(atomic_pointer_type& aptr);
+            inline guard_type guard(const atomic_pointer_type& aptr);
             inline guard_type guard(pointer_type ptr);
 
             void print() const;
@@ -126,7 +126,7 @@ namespace reclamation_tm
     }
 
     template <class T>
-    T* sequential_manager<T>::handle_type::protect(atomic_pointer_type& aptr) const
+    T* sequential_manager<T>::handle_type::protect(const atomic_pointer_type& aptr) const
     {
         return aptr.load();
     }
@@ -172,7 +172,7 @@ namespace reclamation_tm
 
     template <class T>
     typename sequential_manager<T>::handle_type::guard_type
-    sequential_manager<T>::handle_type::guard(atomic_pointer_type& aptr)
+    sequential_manager<T>::handle_type::guard(const atomic_pointer_type& aptr)
     {
         return guard_type(*this, aptr);
     }
