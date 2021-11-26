@@ -33,3 +33,6 @@ target_link_libraries(rec_test PRIVATE Threads::Threads)
 
 add_executable( slinked_list_test src/test_singly_linked_list.cpp)
 target_link_libraries(slinked_list_test PRIVATE Threads::Threads)
+
+add_executable( protected_list_test src/test_protected_list.cpp)
+target_link_libraries(protected_list_test PRIVATE Threads::Threads)
