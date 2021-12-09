@@ -22,9 +22,9 @@ constexpr bool is_defined_128 = false;
 
 inline uint64_t fastrange64(uint64_t cap, uint64_t in)
 {
-    static_assert (is_defined_128,
-                   "128bit integers have to be defined for fastrange64");
+    static_assert(is_defined_128,
+                  "128bit integers have to be defined for fastrange64");
     return (__uint128_t(in) * __uint128_t(cap)) >> 64;
 }
 
-}
+} // namespace utils_tm

@@ -15,14 +15,15 @@
  ******************************************************************************/
 
 #include <cmath>
-#include <random>
 #include <memory>
+#include <random>
 
-namespace utils_tm {
+namespace utils_tm
+{
 
 class zipf_generator
 {
-public:
+  public:
     zipf_generator(size_t universe = 0, double exp = 0.0001)
     {
         initialize(universe, exp);
@@ -32,23 +33,23 @@ public:
     {
         _fast_steps = std::min<size_t>(universe, 100);
         _universe   = universe;
-        _precomp    = std::make_unique<double[]>(universe+1);
+        _precomp    = std::make_unique<double[]>(universe + 1);
         _precomp[0] = 0.;
         auto temp   = 0.;
 
         for (uint i = 1; i <= universe; ++i)
         {
-            temp += 1./std::pow(i,exp);
+            temp += 1. / std::pow(i, exp);
             _precomp[i] = temp;
         }
 
-        _distribution = std::uniform_real_distribution<double>(0., _precomp[universe]);
+        _distribution =
+            std::uniform_real_distribution<double>(0., _precomp[universe]);
     }
 
-    template <class RandomEngine>
-    inline size_t generate(RandomEngine& re)
+    template <class RandomEngine> inline size_t generate(RandomEngine& re)
     {
-        //CMD = Hks/Hns
+        // CMD = Hks/Hns
         auto t_p = _distribution(re);
 
 
@@ -66,20 +67,20 @@ public:
         size_t l = 0;
         size_t r = _universe;
 
-        while (l < r-1)
+        while (l < r - 1)
         {
-            size_t m = (r+l)/2;    //               |            -------/
-            if (_precomp[m] > t_p) // Hks(m,s)  t_p |======o----/
-            {                      //               |   --/|
-                r = m;             //               |  /   |
-            }                      //               | /    |
-            else                   //               |/_____|________________
-            {                      //                l    ret   m         r
+            size_t m = (r + l) / 2; //               |            -------/
+            if (_precomp[m] > t_p)  // Hks(m,s)  t_p |======o----/
+            {                       //               |   --/|
+                r = m;              //               |  /   |
+            }                       //               | /    |
+            else                    //               |/_____|________________
+            {                       //                l    ret   m         r
                 l = m;
             }
         }
 
-        return l+1;
+        return l + 1;
     }
 
     template <class RandomEngine>
@@ -89,7 +90,7 @@ public:
 
         for (size_t i = 0; i < length; ++i)
         {
-            //CMD = Hks/Hns
+            // CMD = Hks/Hns
             randoms[i] = _distribution(re);
         }
 
@@ -99,7 +100,11 @@ public:
             {
                 for (size_t j = 1; j <= _fast_steps; ++j)
                 {
-                    if (_precomp[j] >= randoms[i]) { result[i] = j; break; }
+                    if (_precomp[j] >= randoms[i])
+                    {
+                        result[i] = j;
+                        break;
+                    }
                 }
                 continue;
             }
@@ -108,28 +113,28 @@ public:
             size_t l = 0;
             size_t r = _universe;
 
-            while (l < r-1)
+            while (l < r - 1)
             {
-                size_t m = (r+l)/2;           //               |            -------/
+                size_t m = (r + l) / 2; //               |            -------/
                 if (_precomp[m] > randoms[i]) // Hks(m,s)  t_p |======o----/
                 {                             //               |   --/|
                     r = m;                    //               |  /   |
                 }                             //               | /    |
-                else                          //               |/_____|________________
-                {                             //                l    ret   m         r
+                else //               |/_____|________________
+                {    //                l    ret   m         r
                     l = m;
                 }
             }
 
-            result[i] = l+1;
+            result[i] = l + 1;
         }
     }
 
-private:
-    size_t                                 _universe; //normalization factor
+  private:
+    size_t                                 _universe; // normalization factor
     size_t                                 _fast_steps;
     std::uniform_real_distribution<double> _distribution;
     std::unique_ptr<double[]>              _precomp;
 };
 
-}
+} // namespace utils_tm

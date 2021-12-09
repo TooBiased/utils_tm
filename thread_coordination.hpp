@@ -16,16 +16,18 @@
  * All rights reserved. Published under the BSD-2 license in the LICENSE file.
  ******************************************************************************/
 
-#include <iostream>
 #include <atomic>
 #include <chrono>
+#include <iostream>
 #include <thread>
 #include <type_traits>
 
 #include "output.hpp"
 
-namespace utils_tm {
-namespace thread_tm {
+namespace utils_tm
+{
+namespace thread_tm
+{
 
 
 // EXAMPLE USE
@@ -90,55 +92,54 @@ namespace thread_tm {
 
 
 // THREAD CLASSES + SYNCHRONIZATION ********************************************
-    // The construction of tests (generating thread objects) is explained below
+// The construction of tests (generating thread objects) is explained below
 
 // Each thread object contains the following:
-    // p   (the number of threads)
-    // id  (the number of this current thread)
-    // out (an output, this output is disabled for all non-main-threads,
-    //      but it can be enabled or forwarded to a file)
-    // is_main (self-explanatory)
-    // synchronize() (has to be called by all threads, to synchronize (BARRIER))
-    // synchronized(...) (executes the function on all threads synchroneously)
+// p   (the number of threads)
+// id  (the number of this current thread)
+// out (an output, this output is disabled for all non-main-threads,
+//      but it can be enabled or forwarded to a file)
+// is_main (self-explanatory)
+// synchronize() (has to be called by all threads, to synchronize (BARRIER))
+// synchronized(...) (executes the function on all threads synchroneously)
 
-static std::atomic_size_t        level;
-static std::atomic_size_t        wait_end;
-static std::atomic_size_t        wait_start;
+static std::atomic_size_t level;
+static std::atomic_size_t wait_end;
+static std::atomic_size_t wait_start;
 
 // MAIN THREAD CLASS ***********************************************************
-template <bool timed>
-struct main_thread
+template <bool timed> struct main_thread
 {
-    main_thread(size_t p, size_t id) : p(p), id(id), _stage(0) { }
+    main_thread(size_t p, size_t id) : p(p), id(id), _stage(0) {}
 
-    template<typename Functor, typename ... Types>
-    inline std::pair<typename std::result_of<Functor(Types&& ...)>::type,
-                     size_t>
-        synchronized(Functor f, Types&& ... param)
+    template <typename Functor, typename... Types>
+    inline std::pair<typename std::result_of<Functor(Types&&...)>::type, size_t>
+    synchronized(Functor f, Types&&... param)
     {
-        start_stage(p-1, ++_stage);
-        auto temp = std::forward<Functor>(f)(std::forward<Types>(param) ... );
-        return std::make_pair(std::move(temp), end_stage(p-1, ++_stage));
+        start_stage(p - 1, ++_stage);
+        auto temp = std::forward<Functor>(f)(std::forward<Types>(param)...);
+        return std::make_pair(std::move(temp), end_stage(p - 1, ++_stage));
     }
 
     inline void synchronize()
     {
-        start_stage(p-1, ++_stage);
-        end_stage(p-1,   ++_stage);
+        start_stage(p - 1, ++_stage);
+        end_stage(p - 1, ++_stage);
     }
 
-    size_t p;
-    size_t id;
-    out_tm::output_type out;
+    size_t                p;
+    size_t                id;
+    out_tm::output_type   out;
     static constexpr bool is_main = true;
 
-private:
-    size_t _stage;
+  private:
+    size_t                                                      _stage;
     std::chrono::time_point<std::chrono::high_resolution_clock> start_time;
 
     inline void start_stage(size_t p, size_t lvl)
     {
-        while(wait_start.load(std::memory_order_acquire) < p);
+        while (wait_start.load(std::memory_order_acquire) < p)
+            ;
         wait_start.store(0, std::memory_order_release);
 
         if constexpr (timed)
@@ -151,41 +152,38 @@ private:
 
     inline size_t end_stage(size_t p, size_t lvl)
     {
-        while (wait_end.load(std::memory_order_acquire) < p);
+        while (wait_end.load(std::memory_order_acquire) < p)
+            ;
         wait_end.store(0, std::memory_order_release);
         size_t result = 0;
         if constexpr (timed)
         {
-            result = std::chrono::duration_cast<std::chrono::nanoseconds>
-               (std::chrono::high_resolution_clock::now() - start_time).count();
+            result = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                         std::chrono::high_resolution_clock::now() - start_time)
+                         .count();
         }
         level.store(lvl);
         return result;
     }
 };
 
-using   timed_main_thread = main_thread<true>;
+using timed_main_thread   = main_thread<true>;
 using untimed_main_thread = main_thread<false>;
 
 
 
 // SUB THREAD CLASS ************************************************************
-template <bool timed>
-struct sub_thread
+template <bool timed> struct sub_thread
 {
-    sub_thread(size_t p, size_t id) : p(p), id(id), _stage(0)
-    {
-        out.disable();
-    }
+    sub_thread(size_t p, size_t id) : p(p), id(id), _stage(0) { out.disable(); }
 
-    template<typename Functor, typename ... Types>
-    inline std::pair<typename std::result_of<Functor(Types&& ...)>::type,
-                     size_t>
-    synchronized(Functor f, Types&& ... param)
+    template <typename Functor, typename... Types>
+    inline std::pair<typename std::result_of<Functor(Types&&...)>::type, size_t>
+    synchronized(Functor f, Types&&... param)
     {
-        start_stage(++_stage);//wait_for_stage(stage);
+        start_stage(++_stage); // wait_for_stage(stage);
         auto temp = std::forward<Functor>(f)(std::forward<Types>(param)...);
-        //finished_stage();
+        // finished_stage();
         return std::make_pair(temp, end_stage(++_stage));
     }
 
@@ -195,19 +193,21 @@ struct sub_thread
         end_stage(++_stage);
     }
 
-    size_t p;
-    size_t id;
-    out_tm::output_type out;
+    size_t                p;
+    size_t                id;
+    out_tm::output_type   out;
     static constexpr bool is_main = false;
 
-private:
-    size_t _stage;
+  private:
+    size_t                                                      _stage;
     std::chrono::time_point<std::chrono::high_resolution_clock> start_time;
 
     inline void start_stage(size_t lvl)
     {
         wait_start.fetch_add(1, std::memory_order_acq_rel);
-        while (level.load(std::memory_order_acquire) < lvl) { /* wait */ }
+        while (level.load(std::memory_order_acquire) < lvl)
+        { /* wait */
+        }
         if constexpr (timed)
         {
             start_time = std::chrono::high_resolution_clock::now();
@@ -221,46 +221,46 @@ private:
         size_t result = 0;
         if constexpr (timed)
         {
-            result = std::chrono::duration_cast<std::chrono::nanoseconds>
-               (std::chrono::high_resolution_clock::now() - start_time).count();
+            result = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                         std::chrono::high_resolution_clock::now() - start_time)
+                         .count();
         }
 
-        while (level.load(std::memory_order_acquire) < lvl) { /* wait */ }
+        while (level.load(std::memory_order_acquire) < lvl)
+        { /* wait */
+        }
 
         return result;
     }
 };
 
-//time is measured relative to the global start
-using     timed_sub_thread = sub_thread<true>;
-using   untimed_sub_thread = sub_thread<false>;
+// time is measured relative to the global start
+using timed_sub_thread   = sub_thread<true>;
+using untimed_sub_thread = sub_thread<false>;
 
 
 // START TEST ******************************************************************
 // 1. starts p-1 Subthreads
 // 2. executes the Functor as Mainthread
 // 3. rejoins the generated threads
-template<template <class> class Functor, typename ... Types>
-inline int start_threads(size_t p, Types&& ... param)
+template <template <class> class Functor, typename... Types>
+inline int start_threads(size_t p, Types&&... param)
 {
-    std::thread* local_thread = new std::thread[p-1];
+    std::thread* local_thread = new std::thread[p - 1];
 
-    for (size_t i = 0; i < p-1; ++i)
+    for (size_t i = 0; i < p - 1; ++i)
     {
-        local_thread[i] = std::thread(Functor<untimed_sub_thread>::execute,
-                                      untimed_sub_thread(p, i+1),
-                                      std::ref(param)...);
+        local_thread[i] =
+            std::thread(Functor<untimed_sub_thread>::execute,
+                        untimed_sub_thread(p, i + 1), std::ref(param)...);
     }
 
     // int temp =0;
-    int temp = Functor<timed_main_thread>::execute(timed_main_thread(p, 0),
-                                                   param...);
+    int temp =
+        Functor<timed_main_thread>::execute(timed_main_thread(p, 0), param...);
 
     // CLEANUP THREADS
-    for (size_t i = 0; i < p-1; ++i)
-    {
-        local_thread[i].join();
-    }
+    for (size_t i = 0; i < p - 1; ++i) { local_thread[i].join(); }
 
     delete[] local_thread;
 
@@ -273,37 +273,32 @@ inline int start_threads(size_t p, Types&& ... param)
 // PARALLEL FOR LOOPS **********************************************************
 static const size_t block_size = 4096;
 
-//BLOCKWISE EXECUTION IN PARALLEL
-template<typename Functor, typename ... Types>
-inline void execute_parallel(std::atomic_size_t& global_counter,
-                             size_t e,
-                             Functor f,
-                             Types&& ... param)
+// BLOCKWISE EXECUTION IN PARALLEL
+template <typename Functor, typename... Types>
+inline void execute_parallel(std::atomic_size_t& global_counter, size_t e,
+                             Functor f, Types&&... param)
 {
     auto c_s = global_counter.fetch_add(block_size);
     while (c_s < e)
     {
-        auto c_e = std::min(c_s+block_size, e);
-        for (size_t i = c_s; i < c_e; ++i)
-            f(i, std::forward<Types>(param)...);
+        auto c_e = std::min(c_s + block_size, e);
+        for (size_t i = c_s; i < c_e; ++i) f(i, std::forward<Types>(param)...);
         c_s = global_counter.fetch_add(block_size);
     }
 }
 
-template<typename Functor, typename ... Types>
+template <typename Functor, typename... Types>
 inline void execute_blockwise_parallel(std::atomic_size_t& global_counter,
-                                       size_t e,
-                                       Functor f,
-                                       Types&& ... param)
+                                       size_t e, Functor f, Types&&... param)
 {
     auto c_s = global_counter.fetch_add(block_size);
     while (c_s < e)
     {
-        auto c_e = std::min(c_s+block_size, e);
+        auto c_e = std::min(c_s + block_size, e);
         f(c_s, c_e, std::forward<Types>(param)...);
         c_s = global_counter.fetch_add(block_size);
     }
 }
 
-}
-}
+} // namespace thread_tm
+} // namespace utils_tm

@@ -12,40 +12,41 @@
  * All rights reserved. Published under the BSD-2 license in the LICENSE file.
  ******************************************************************************/
 
-#include <string>
-#include <vector>
-#include <tuple>
 #include <clocale>
 #include <iostream>
+#include <string>
+#include <tuple>
+#include <vector>
 
-namespace utils_tm {
+namespace utils_tm
+{
 
 class command_line_parser
 {
-public:
+  public:
     command_line_parser(int argn, char** argc)
     {
         std::setlocale(LC_ALL, "en_US.UTF-8");
         for (size_t i = 0; i < size_t(argn); ++i)
         {
             _param_vec.emplace_back(argc[i]);
-            _flag_vec .push_back   (usage_flags::unused);
+            _flag_vec.push_back(usage_flags::unused);
         }
     }
 
     std::string str_arg(const std::string& name, const std::string def = "")
     {
         auto ind = find_name(name);
-        if (ind+1 < _param_vec.size())
+        if (ind + 1 < _param_vec.size())
         {
-            _flag_vec[ind+1] = usage_flags::used;
-            return _param_vec[ind+1];
+            _flag_vec[ind + 1] = usage_flags::used;
+            return _param_vec[ind + 1];
         }
         else if (ind < _param_vec.size())
         {
             _flag_vec[ind] = usage_flags::error;
-            std::cout << "found argument \"" << name << "\" without following integer!"
-                      << std::endl;
+            std::cout << "found argument \"" << name
+                      << "\" without following integer!" << std::endl;
         }
         return def;
     }
@@ -53,57 +54,62 @@ public:
     int int_arg(const std::string& name, int def = 0)
     {
         auto ind = find_name(name);
-        if (ind+1 < _param_vec.size())
+        if (ind + 1 < _param_vec.size())
         {
-            _flag_vec[ind+1] = usage_flags::used;
-            int  r = 0;
+            _flag_vec[ind + 1] = usage_flags::used;
+            int r              = 0;
             try
-            {   r = std::stoi(_param_vec[ind+1]);   }
+            {
+                r = std::stoi(_param_vec[ind + 1]);
+            }
             catch (std::invalid_argument& e)
             {
-                _flag_vec[ind+1] = usage_flags::error;
-                r = def;
-                std::cout << "error reading int argument \"" << name
-                          << "\" from console, got \"invalid_argument exception\""
-                          << std::endl;
+                _flag_vec[ind + 1] = usage_flags::error;
+                r                  = def;
+                std::cout
+                    << "error reading int argument \"" << name
+                    << "\" from console, got \"invalid_argument exception\""
+                    << std::endl;
             }
             return r;
         }
         else if (ind < _param_vec.size())
         {
             _flag_vec[ind] = usage_flags::error;
-            std::cout << "found argument \"" << name << "\" without following integer!"
-                      << std::endl;
+            std::cout << "found argument \"" << name
+                      << "\" without following integer!" << std::endl;
         }
         return def;
-
     }
 
     double double_arg(const std::string& name, double def = 0.)
     {
         std::setlocale(LC_ALL, "en_US.UTF-8");
         auto ind = find_name(name);
-        if (ind+1 < _param_vec.size())
+        if (ind + 1 < _param_vec.size())
         {
-            _flag_vec[ind+1] = usage_flags::used;
-            double  r = 0;
+            _flag_vec[ind + 1] = usage_flags::used;
+            double r           = 0;
             try
-            {   r = std::stod(_param_vec[ind+1]);   }
+            {
+                r = std::stod(_param_vec[ind + 1]);
+            }
             catch (std::invalid_argument& e)
             {
-                _flag_vec[ind+1] = usage_flags::error;
-                r = def;
-                std::cout << "error reading double argument \"" << name
-                          << "\" from console, got \"invalid-argument exception\"!"
-                          << std::endl;
+                _flag_vec[ind + 1] = usage_flags::error;
+                r                  = def;
+                std::cout
+                    << "error reading double argument \"" << name
+                    << "\" from console, got \"invalid-argument exception\"!"
+                    << std::endl;
             }
             return r;
         }
         else if (ind < _param_vec.size())
         {
             _flag_vec[ind] = usage_flags::error;
-            std::cout << "found argument \"" << name << "\" without following double!"
-                      << std::endl;
+            std::cout << "found argument \"" << name
+                      << "\" without following double!" << std::endl;
         }
         return def;
     }
@@ -127,8 +133,8 @@ public:
                 }
                 else if (_flag_vec[i] == usage_flags::error)
                 {
-                    std::cout << "error reading parameter " << i
-                              << " = \"" << _param_vec[i] << "\"" << std::endl;
+                    std::cout << "error reading parameter " << i << " = \""
+                              << _param_vec[i] << "\"" << std::endl;
                 }
                 un = false;
             }
@@ -136,7 +142,7 @@ public:
         return un;
     }
 
-private:
+  private:
     enum class usage_flags
     {
         unused,
@@ -145,7 +151,7 @@ private:
     };
 
     std::vector<std::string> _param_vec;
-    std::vector<usage_flags>  _flag_vec;
+    std::vector<usage_flags> _flag_vec;
 
     size_t find_name(const std::string& name)
     {
@@ -159,7 +165,6 @@ private:
         }
         return _param_vec.size();
     }
-
 };
 
-}
+} // namespace utils_tm

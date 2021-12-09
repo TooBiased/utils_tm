@@ -18,64 +18,71 @@
  * All rights reserved. Published under the BSD-2 license in the LICENSE file.
  ******************************************************************************/
 
-#if (! (defined(CRC)     || \
-        defined(MURMUR2) || \
-        defined(MURMUR3) || \
-        defined(XXHASH)  || \
-        defined(XXH3)) )
+#if (!(defined(CRC) || defined(MURMUR2) || defined(MURMUR3) || \
+       defined(XXHASH) || defined(XXH3)))
 #define MURMUR2
 #endif // NO HASH DEFINED
 
 #ifdef CRC
 #include "hash/crc_hash.hpp"
 #define HASHFCT utils_tm::hash_tm::crc_hash
-namespace utils_tm {
-namespace hash_tm {
-    using default_hash = crc_hash;
+namespace utils_tm
+{
+namespace hash_tm
+{
+using default_hash = crc_hash;
 }
-}
-#endif //CRC
+} // namespace utils_tm
+#endif // CRC
 
 
 #ifdef MURMUR2
 #include "hash/murmur2_hash.hpp"
 #define HASHFCT utils_tm::hash_tm::murmur2_hash
-namespace utils_tm {
-namespace hash_tm {
-    using default_hash = murmur2_hash;
+namespace utils_tm
+{
+namespace hash_tm
+{
+using default_hash = murmur2_hash;
 }
-}
+} // namespace utils_tm
 #endif // MURMUR2
 
 
 #ifdef MURMUR3
 #include "hash/murmur3_hash.hpp"
 #define HASHFCT utils_tm::hash_tm::murmur3_hash
-namespace utils_tm {
-namespace hash_tm {
-    using default_hash = murmur3_hash;
+namespace utils_tm
+{
+namespace hash_tm
+{
+using default_hash = murmur3_hash;
 }
-}
+} // namespace utils_tm
 #endif // MURMUR3
 
 
 #ifdef XXHASH
 #include "hash/xx_hash.hpp"
 #define HASHFCT utils_tm::hash_tm::xx_hash
-namespace utils_tm {
-namespace hash_tm {
-    using default_hash = xx_hash;
+namespace utils_tm
+{
+namespace hash_tm
+{
+using default_hash = xx_hash;
 }
-}
+} // namespace utils_tm
 #endif // XXHASH
 
 
 #ifdef XXH3
 #include "hash/xx_h3.hpp"
 #define HASHFCT utils_tm::hash_tm::xx_h3
-namespace utils_tm {
-namespace hash_tm {
-    using default_hash = xx_h3;
+namespace utils_tm
+{
+namespace hash_tm
+{
+using default_hash = xx_h3;
 }
-}
+} // namespace utils_tm
 #endif // XXH3

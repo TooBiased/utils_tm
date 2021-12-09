@@ -21,7 +21,8 @@
 
 #include <pthread.h>
 
-namespace utils_tm {
+namespace utils_tm
+{
 
 void pin_to_core(size_t core)
 {
@@ -31,4 +32,4 @@ void pin_to_core(size_t core)
     pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
 }
 
-}
+} // namespace utils_tm
