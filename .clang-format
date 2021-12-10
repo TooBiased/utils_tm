@@ -12,6 +12,7 @@ AllowShortFunctionsOnASingleLine: All
 AllowShortIfStatementsOnASingleLine: WithoutElse
 AllowShortLambdasOnASingleLine: All
 AllowShortLoopsOnASingleLine: 'true'
+AlwaysBreakTemplateDeclarations: 'Yes'
 BinPackParameters: 'false'
 ColumnLimit: '80'
 DerivePointerAlignment: 'false'
