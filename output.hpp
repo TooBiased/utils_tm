@@ -46,7 +46,7 @@ class output_type
         _outstream  = &(std::cout);
     }
 
-    void set_file(std::string& name)
+    void set_file(const std::string& name)
     {
         cleanup();
 
@@ -66,7 +66,8 @@ class output_type
     void disable() { cleanup(); }
 
 
-    template <class T> friend output_type& operator<<(output_type& out, T&& t);
+    template <class T>
+    friend output_type& operator<<(output_type& out, T&& t);
     friend output_type& operator<<(output_type& out, manipulator_type t);
 
   private:
@@ -89,7 +90,8 @@ class output_type
 
 
 // base case, everything is output through the device
-template <typename T> inline output_type& operator<<(output_type& cons, T&& t)
+template <typename T>
+inline output_type& operator<<(output_type& cons, T&& t)
 {
     if (!cons._outstream) return cons;
     *(cons._outstream) << std::forward<T>(t);
@@ -116,7 +118,8 @@ inline output_type& out()
 
 
 
-template <class Out> class locally_buffered_output
+template <class Out>
+class locally_buffered_output
 {
   private:
     using stream_type = Out;
@@ -228,7 +231,8 @@ inline std::ostream& operator<<(std::ostream& o, width w)
 
 
 // PRINT BITS STUFF ************************************************************
-template <class int_type> std::string bit_print(int_type t)
+template <class int_type>
+std::string bit_print(int_type t)
 {
     constexpr size_t length = sizeof(int_type) * 8;
 
@@ -250,7 +254,8 @@ template <class int_type> std::string bit_print(int_type t)
     return buffer.str();
 }
 
-template <class int_type> std::string hex_print(int_type t)
+template <class int_type>
+std::string hex_print(int_type t)
 {
     constexpr size_t length  = sizeof(int_type) * 8;
     constexpr char   table[] = {'0', '1', '2', '3', '4', '5', '6', '7',
