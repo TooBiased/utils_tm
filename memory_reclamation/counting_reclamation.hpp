@@ -56,8 +56,8 @@ class counting_manager
     using atomic_pointer_type = std::atomic<T*>;
     using protected_type      = internal_type;
 
-    template <class lT = T,
-              class lD = typename Destructor::template rebind<lT>,
+    template <class lT                  = T,
+              class lD                  = default_destructor<lT>,
               template <class> class lQ = Queue>
     struct rebind
     {

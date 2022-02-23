@@ -34,7 +34,7 @@ class hazard_manager
     using protected_type      = T;
 
     template <class lT   = T,
-              class lD   = typename Destructor::template rebind<lT>,
+              class lD   = default_destructor<lT>,
               size_t lmT = maxThreads,
               size_t lmP = maxProtections>
     struct rebind
