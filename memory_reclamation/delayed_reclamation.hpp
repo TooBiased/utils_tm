@@ -23,6 +23,13 @@ class delayed_manager
   public:
     using pointer_type        = T*;
     using atomic_pointer_type = std::atomic<T*>;
+    using protected_type      = T;
+
+    template <class lT = T>
+    struct rebind
+    {
+        using other = delayed_manager<lT>;
+    };
 
     delayed_manager()                       = default;
     delayed_manager(const delayed_manager&) = delete;
@@ -53,7 +60,8 @@ class delayed_manager
         std::vector<pointer_type> freelist;
 
       public:
-        template <class... Args> inline T* create_pointer(Args&&... arg) const;
+        template <class... Args>
+        inline T* create_pointer(Args&&... arg) const;
 
         inline T*   protect(const atomic_pointer_type& ptr) const;
         inline void safe_delete(pointer_type ptr);
@@ -77,7 +85,8 @@ class delayed_manager
 
 
 
-template <class T> delayed_manager<T>::handle_type::~handle_type()
+template <class T>
+delayed_manager<T>::handle_type::~handle_type()
 {
     for (auto curr : freelist) delete curr;
 }
@@ -150,7 +159,8 @@ delayed_manager<T>::handle_type::guard(pointer_type ptr)
 }
 
 
-template <class T> void delayed_manager<T>::handle_type::print() const
+template <class T>
+void delayed_manager<T>::handle_type::print() const
 {
     out_tm::out() << "* print in delayed reclamation strategy "
                   << freelist.size() << " pointer flagged for deletion *"

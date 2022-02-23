@@ -19,8 +19,10 @@ namespace reclamation_tm
 namespace otm = out_tm;
 namespace dtm = debug_tm;
 
-template <class T, class Destructor = default_destructor<T>,
-          size_t maxThreads = 64, size_t maxProtections = 256>
+template <class T,
+          class Destructor      = default_destructor<T>,
+          size_t maxThreads     = 64,
+          size_t maxProtections = 256>
 class hazard_manager
 {
   private:
@@ -29,6 +31,18 @@ class hazard_manager
   public:
     using pointer_type        = T*;
     using atomic_pointer_type = std::atomic<T*>;
+    using protected_type      = T;
+
+    template <class lT   = T,
+              class lD   = typename Destructor::template rebind<lT>,
+              size_t lmT = maxThreads,
+              size_t lmP = maxProtections>
+    struct rebind
+    {
+        using other = hazard_manager<lT, lD, lmT, lmP>;
+    };
+
+
 
     hazard_manager(const Destructor& destructor = Destructor())
         : _destructor(destructor), _handle_counter(-1)
@@ -90,7 +104,8 @@ class hazard_manager
         handle_type& operator=(handle_type&& other) noexcept;
         ~handle_type();
 
-        template <class... Args> inline T* create_pointer(Args&&... args) const;
+        template <class... Args>
+        inline T* create_pointer(Args&&... args) const;
 
         inline T*   protect(const atomic_pointer_type& ptr);
         inline void protect_raw(pointer_type ptr);
@@ -281,10 +296,7 @@ hazard_manager<T, D, mt, mp>::internal_handle::mark(pointer_type ptr, int pos)
     if (pos < 0) temp = _counter.load() - 1;
     dtm::if_debug("Error: in mark -- "
                   "pos larger than expected",
-                  pos >= int(mp));
-    dtm::if_debug("Error: in mark -- "
-                  "pos below 0 after load",
-                  pos < 0);
+                  temp >= int(mp));
 
     for (int i = temp; i >= 0; i--)
     {
@@ -398,7 +410,8 @@ template <class... Args>
 T* hazard_manager<T, D, mt, mp>::handle_type::create_pointer(
     Args&&... args) const
 {
-    return new T(std::forward<Args>(args)...);
+    auto temp = new T(std::forward<Args>(args)...);
+    return temp;
 }
 
 template <class T, class D, size_t mt, size_t mp>

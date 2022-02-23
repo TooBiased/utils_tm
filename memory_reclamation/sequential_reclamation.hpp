@@ -68,6 +68,13 @@ class sequential_manager
   public:
     using pointer_type        = T*;
     using atomic_pointer_type = std::atomic<T*>;
+    using protected_type      = T;
+
+    template <class lT = T>
+    struct rebind
+    {
+        using other = sequential_manager<lT>;
+    };
 
     sequential_manager()                          = default;
     sequential_manager(const sequential_manager&) = delete;
@@ -95,7 +102,8 @@ class sequential_manager
         ~handle_type()                                       = default;
 
       public:
-        template <class... Args> inline T* create_pointer(Args&&... arg) const;
+        template <class... Args>
+        inline T* create_pointer(Args&&... arg) const;
 
         inline T*   protect(const atomic_pointer_type& aptr) const;
         inline void safe_delete(pointer_type ptr) const;
@@ -187,7 +195,8 @@ sequential_manager<T>::handle_type::guard(pointer_type ptr)
 }
 
 
-template <class T> void sequential_manager<T>::handle_type::print() const
+template <class T>
+void sequential_manager<T>::handle_type::print() const
 {
     out_tm::out() << "* print sequential reclamation handle *" << std::endl;
     return;
