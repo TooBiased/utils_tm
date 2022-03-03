@@ -35,11 +35,12 @@ class counting_manager
         template <class... Args>
         void emplace(Args&&... arg);
 
-        void increment_counter();
-        bool decrement_counter();
-        bool mark_deletion();
-        bool is_safe();
-        bool reset();
+        void               increment_counter();
+        [[nodiscard]] bool decrement_counter();
+        [[nodiscard]] bool mark_deletion();
+        bool               is_safe();
+        bool               reset();
+        void               print() const;
 
       private:
         std::atomic_uint      _counter;
@@ -115,6 +116,7 @@ class counting_manager
         inline void delete_raw(pointer_type ptr);
         inline bool is_safe(pointer_type ptr);
 
+        void print(pointer_type ptr) const;
         void print() const;
 
       private:
@@ -218,6 +220,14 @@ bool counting_manager<T, D, Q>::_counted_object::reset()
     return _counter.compare_exchange_strong(temp, 0);
 }
 
+template <class T, class D, template <class> class Q>
+void counting_manager<T, D, Q>::_counted_object::print()
+{
+    auto temp = _counter.load();
+    otm::out() << (temp & del_flag) ? "d"
+                                    : "" << temp & (^del_flag) << std::endl;
+}
+
 
 // *** HANDLE STUFF ************************************************************
 // ***** HANDLE MAIN FUNCTIONALITY *********************************************
@@ -253,7 +263,8 @@ T* counting_manager<T, D, Q>::handle_type::protect(
     auto temp2 = ptr.load();
     while (temp != temp2)
     {
-        get_iptr(temp)->decrement_counter();
+        auto itemp = get_iptr(temp);
+        if (itemp->decrement_counter()) internal_delete(itemp);
         temp = temp2;
         if (!mark::clear(temp)) return nullptr;
         get_iptr(temp)->increment_counter();
@@ -332,6 +343,13 @@ bool counting_manager<T, D, Q>::handle_type::is_safe(pointer_type ptr)
 
 // ***** HANDLE HELPER FUNCTIONS ***********************************************
 template <class T, class D, template <class> class Q>
+void counting_manager<T, D, Q>::handle_type::print(pointer_type ptr) const
+{
+    get_iptr(ptr)->print();
+}
+
+
+template <class T, class D, template <class> class Q>
 void counting_manager<T, D, Q>::handle_type::print() const
 {
     std::lock_guard<std::mutex> guard(_parent._freelist_mutex);
@@ -339,7 +357,6 @@ void counting_manager<T, D, Q>::handle_type::print() const
                   << _parent._freelist.size() << " elements in the freelist *"
                   << std::endl;
 }
-
 
 
 template <class T, class D, template <class> class Q>
