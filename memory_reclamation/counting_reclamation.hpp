@@ -221,13 +221,12 @@ bool counting_manager<T, D, Q>::_counted_object::reset()
 }
 
 template <class T, class D, template <class> class Q>
-void counting_manager<T, D, Q>::_counted_object::print()
+void counting_manager<T, D, Q>::_counted_object::print() const
 {
     auto temp = _counter.load();
-    otm::out() << (temp & del_flag) ? "d"
-                                    : "" << temp & (^del_flag) << std::endl;
+    out_tm::out() << ((temp & del_flag) ? "d" : "") //
+                  << (temp & (~del_flag)) << std::endl;
 }
-
 
 // *** HANDLE STUFF ************************************************************
 // ***** HANDLE MAIN FUNCTIONALITY *********************************************
