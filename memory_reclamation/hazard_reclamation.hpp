@@ -44,8 +44,8 @@ class hazard_manager
 
 
 
-    hazard_manager(const Destructor& destructor = Destructor())
-        : _destructor(destructor), _handle_counter(-1)
+    hazard_manager(Destructor&& destructor = Destructor())
+        : _destructor(std::move(destructor)), _handle_counter(-1)
     {
         for (auto& a : _handles) a.store(nullptr);
     }
