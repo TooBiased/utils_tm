@@ -119,7 +119,7 @@ class hazard_manager
         inline void safe_delete(pointer_type ptr);
         inline void delete_raw(pointer_type ptr);
         inline bool is_safe(pointer_type ptr);
-
+        inline void print(pointer_type ptr);
 
 
         void print() const;
@@ -510,6 +510,19 @@ bool hazard_manager<T, D, mt, mp>::handle_type::is_safe(pointer_type ptr)
         if (temp_handle->find(cptr) != -1) return false;
     }
     return true;
+}
+
+template <class T, class D, size_t mt, size_t mp>
+void hazard_manager<T, D, mt, mp>::handle_type::print(pointer_type ptr)
+{
+    auto cptr = mark::clear(ptr);
+    for (int i = _parent._handle_counter.load(); i >= 0; --i)
+    {
+        auto temp_handle = _parent._handles[i].load();
+        if (mark::get_mark<0>(temp_handle)) continue;
+        if (temp_handle->find(cptr) != -1)
+            otm::out() << "element is protected in handle " << i << std::endl;
+    }
 }
 
 // ***** HANDLE HELPER FUNCTION ********************************************
