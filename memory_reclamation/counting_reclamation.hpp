@@ -75,7 +75,7 @@ class counting_manager
     counting_manager& operator=(const counting_manager&) = delete;
     counting_manager(counting_manager&& other);
     counting_manager& operator=(counting_manager&& other);
-    ~counting_manager()       = default;
+    ~counting_manager();
 
     class handle_type
     {
@@ -125,6 +125,7 @@ class counting_manager
     };
 
     handle_type get_handle() { return handle_type(*this); }
+    void        delete_raw(pointer_type ptr);
 
   private:
     destructor_type _destructor;
@@ -151,6 +152,24 @@ counting_manager<T, D, Q>::operator=(counting_manager&& other)
     return *this;
 }
 
+template <class T, class D, template <class> class Q>
+counting_manager<T, D, Q>::~counting_manager()
+{
+    // no concurrency possible thus no mutex necessary
+    // std::lock_guard<std::mutex> guard(_freelist_mutex);
+    for (auto ptr : _freelist) free(ptr, sizeof(internal_type));
+}
+
+template <class T, class D, template <class> class Q>
+void counting_manager<T, D, Q>::delete_raw(pointer_type ptr)
+{
+    auto iptr = static_cast<internal_type*>(mark::clear(ptr));
+
+    iptr->internal_type::erase();
+
+    std::lock_guard<std::mutex> guard(_freelist_mutex);
+    _freelist.push_back(iptr);
+}
 
 
 
@@ -247,7 +266,10 @@ T* counting_manager<T, D, Q>::handle_type::create_pointer(Args&&... arg) const
         return temp;
     }
 #endif
-    temp = new internal_type(std::forward<Args>(arg)...);
+    // temp = new internal_type(std::forward<Args>(arg)...);
+    temp = static_cast<internal_type*>(malloc(sizeof(internal_type)));
+    new (temp) internal_type(std::forward<Args>(arg)...);
+
     return temp;
 }
 

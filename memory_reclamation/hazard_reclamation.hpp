@@ -137,6 +137,7 @@ class hazard_manager
     using guard_type = typename handle_type::guard_type;
 
     handle_type get_handle();
+    void        delete_raw(pointer_type ptr);
     void        print() const;
 
   private:
@@ -200,6 +201,13 @@ hazard_manager<T, D, mt, mp>::get_handle()
                << std::endl;
     return handle_type(*this, *temp0, -666);
 }
+
+template <class T, class D, size_t mt, size_t mp>
+void hazard_manager<T, D, mt, mp>::delete_raw(pointer_type ptr)
+{
+    delete mark::clear(ptr);
+}
+
 
 template <class T, class D, size_t mt, size_t mp>
 void hazard_manager<T, D, mt, mp>::print() const
@@ -366,6 +374,7 @@ hazard_manager<T, D, mt, mp>::handle_type::handle_type(
     parent_type& parent, internal_handle& internal, int id)
     : n(0), _parent(parent), _internal(internal), _id(id)
 {
+    std::cout << "created hzrd handle id " << id << std::endl;
 }
 
 template <class T, class D, size_t mt, size_t mp>
@@ -496,7 +505,7 @@ void hazard_manager<T, D, mt, mp>::handle_type::safe_delete(pointer_type ptr)
 template <class T, class D, size_t mt, size_t mp>
 void hazard_manager<T, D, mt, mp>::handle_type::delete_raw(pointer_type ptr)
 {
-    delete mark::clear(ptr);
+    // delete mark::clear(ptr);
 }
 
 template <class T, class D, size_t mt, size_t mp>

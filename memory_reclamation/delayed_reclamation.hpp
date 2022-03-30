@@ -79,6 +79,7 @@ class delayed_manager
         void print() const;
     };
     handle_type get_handle() { return handle_type(); }
+    void        delete_raw(pointer_type ptr) { delete mark::clear(ptr); }
 };
 
 
