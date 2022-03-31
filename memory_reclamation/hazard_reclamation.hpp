@@ -77,7 +77,7 @@ class hazard_manager
         inline istate                 replace(int i, pointer_type ptr);
 
         // has to work concurrently
-        inline istate mark(pointer_type ptr, int pos = 1);
+        inline istate mark(pointer_type ptr, int pos = -1);
         inline int    find(pointer_type ptr) const;
         void          print() const;
     };
@@ -246,16 +246,20 @@ hazard_manager<T, D, mt, mp>::internal_handle::remove(pointer_type ptr)
     auto pos = find(ptr);
     if (pos < 0) { return std::make_pair(istate::NOT_FOUND, -1); }
 
-    auto last_pos = _counter.load() - 1;
+    auto tsize = _counter.load();
     dtm::if_debug_critical("Error: in remove -- "
                            "too many protected pointers",
-                           pos >= int(mp));
+                           tsize > int(mp));
     dtm::if_debug_critical("Error: in remove -- "
                            "below 0 protected pointers",
-                           pos < 0);
+                           tsize < 0);
+    dtm::if_debug_critical("Error: in remove -- "
+                           "found instance is beyond tsize",
+                           pos >= tsize);
 
-    if (pos == last_pos)
+    if (pos == tsize - 1)
     {
+        // removing the last element -> no swap necessary
         _counter.fetch_sub(1);
         auto temp = _ptr[pos].exchange(nullptr);
         dtm::if_debug("Warning: in rec handle remove"
@@ -265,7 +269,7 @@ hazard_manager<T, D, mt, mp>::internal_handle::remove(pointer_type ptr)
             (mark::get_mark<0>(temp)) ? istate::MARKED : istate::UNMARKED, pos);
     }
 
-    auto last_ptr = _ptr[last_pos].load();
+    auto last_ptr = _ptr[tsize - 1].load();
     auto temp     = _ptr[pos].exchange(last_ptr);
 
     dtm::if_debug("Warning: in rec handle remove"
@@ -275,13 +279,13 @@ hazard_manager<T, D, mt, mp>::internal_handle::remove(pointer_type ptr)
     bool was_marked = mark::get_mark<0>(temp);
 
     _counter.fetch_sub(1);
-    temp = _ptr[last_pos].exchange(nullptr);
+    temp = _ptr[tsize - 1].exchange(nullptr);
     if (last_ptr != temp)
     {
         dtm::if_debug("Warning: in rec handle remove"
                       " -- last element changed",
                       mark::clear(temp) != last_ptr);
-        _ptr[pos].store(last_ptr);
+        _ptr[pos].store(temp);
     }
 
     return std::make_pair(was_marked ? istate::MARKED : istate::UNMARKED, pos);
@@ -329,28 +333,16 @@ hazard_manager<T, D, mt, mp>::internal_handle::mark(pointer_type ptr, int pos)
 template <class T, class D, size_t mt, size_t mp>
 int hazard_manager<T, D, mt, mp>::internal_handle::find(pointer_type ptr) const
 {
-    auto temp = _counter.load() - 1;
+    auto temp = _counter.load();
     dtm::if_debug("Error: in find -- "
                   "too many current elements",
-                  temp >= int(mp));
-    if (temp >= int(mp))
-    {
-        std::cout << "this is weird and should not happen" << std::endl
-                  << temp << " elements when calling find" << std::endl
-                  << this << " this pointer" << std::endl;
-    }
+                  temp > int(mp));
 
     dtm::if_debug("Error: in find -- "
                   "below 0 current elements",
-                  temp < -1); // might be 0
-    if (temp < -2)
-    {
-        std::cout << "this is weird and should not happen (2nd)" << std::endl
-                  << temp << " elements when calling find" << std::endl
-                  << this << " this pointer" << std::endl;
-    }
+                  temp < 0);
 
-    for (int i = temp; i >= 0; i--)
+    for (int i = temp - 1; i >= 0; i--)
     {
         if (mark::clear(_ptr[i].load()) == ptr) return i;
     }
@@ -374,7 +366,6 @@ hazard_manager<T, D, mt, mp>::handle_type::handle_type(
     parent_type& parent, internal_handle& internal, int id)
     : n(0), _parent(parent), _internal(internal), _id(id)
 {
-    std::cout << "created hzrd handle id " << id << std::endl;
 }
 
 template <class T, class D, size_t mt, size_t mp>
@@ -466,11 +457,6 @@ void hazard_manager<T, D, mt, mp>::handle_type::unprotect(pointer_type ptr)
     auto [st, pos] = _internal.remove(cptr);
     dtm::if_debug("Warning: in recl handle unprotect -- pointer not found",
                   st == istate::NOT_FOUND);
-    if (st == istate::NOT_FOUND)
-    {
-        std::cout << "looking for " << cptr << " in:" << std::endl;
-        _internal.print();
-    }
     if (st == istate::MARKED) continue_deletion(cptr, pos);
 }
 
@@ -499,13 +485,22 @@ hazard_manager<T, D, mt, mp>::handle_type::guard(pointer_type aptr)
 template <class T, class D, size_t mt, size_t mp>
 void hazard_manager<T, D, mt, mp>::handle_type::safe_delete(pointer_type ptr)
 {
-    continue_deletion(ptr);
+    auto cptr = mark::clear(ptr);
+    for (int i = _parent._handle_counter.load(); i >= 0; --i)
+    {
+        auto temp_handle = _parent._handles[i].load();
+        if (mark::get_mark<0>(temp_handle)) continue;
+        if (temp_handle->mark(cptr) != istate::NOT_FOUND) return;
+    }
+
+    _parent._destructor.destroy(*this, ptr);
 }
 
 template <class T, class D, size_t mt, size_t mp>
 void hazard_manager<T, D, mt, mp>::handle_type::delete_raw(pointer_type ptr)
 {
-    // delete mark::clear(ptr);
+    auto cptr = mark::clear(ptr);
+    delete mark::clear(cptr);
 }
 
 template <class T, class D, size_t mt, size_t mp>

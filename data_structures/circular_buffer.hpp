@@ -10,7 +10,8 @@ namespace utils_tm
 
 // This structure is owned by one thread, and is meant to pass inputs
 // to that thread
-template <class T> class circular_buffer
+template <class T>
+class circular_buffer
 {
   private:
     using this_type = circular_buffer<T>;
@@ -30,10 +31,12 @@ template <class T> class circular_buffer
     circular_buffer& operator=(circular_buffer&& rhs);
     ~circular_buffer();
 
-    inline void                          push_back(const T& e);
-    inline void                          push_front(const T& e);
-    template <class... Args> inline void emplace_back(Args&&... args);
-    template <class... Args> inline void emplace_front(Args&&... args);
+    inline void push_back(const T& e);
+    inline void push_front(const T& e);
+    template <class... Args>
+    inline void emplace_back(Args&&... args);
+    template <class... Args>
+    inline void emplace_front(Args&&... args);
 
     inline std::optional<T> pop_back();
     inline std::optional<T> pop_front();
@@ -41,7 +44,8 @@ template <class T> class circular_buffer
     size_t size() const;
     size_t capacity() const;
 
-    template <bool is_const> class iterator_base
+    template <bool is_const>
+    class iterator_base
     {
       private:
         using this_type = iterator_base<is_const>;
@@ -140,7 +144,8 @@ circular_buffer<T>& circular_buffer<T>::operator=(circular_buffer&& other)
     return *this;
 }
 
-template <class T> circular_buffer<T>::~circular_buffer()
+template <class T>
+circular_buffer<T>::~circular_buffer()
 {
     cleanup();
     free(_buffer);
@@ -150,7 +155,8 @@ template <class T> circular_buffer<T>::~circular_buffer()
 
 
 // MAIN FUNCTIONALITY !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-template <class T> void circular_buffer<T>::push_back(const T& e)
+template <class T>
+void circular_buffer<T>::push_back(const T& e)
 {
 
     if (_end > _start + _bitmask) grow();
@@ -159,7 +165,8 @@ template <class T> void circular_buffer<T>::push_back(const T& e)
     _end               = inc(_end);
 }
 
-template <class T> void circular_buffer<T>::push_front(const T& e)
+template <class T>
+void circular_buffer<T>::push_front(const T& e)
 {
     if (_end > _start + _bitmask) grow();
 
@@ -188,7 +195,8 @@ void circular_buffer<T>::emplace_front(Args&&... args)
     new (&_buffer[mod(_start)]) T(std::forward<Args>(args)...);
 }
 
-template <class T> std::optional<T> circular_buffer<T>::pop_back()
+template <class T>
+std::optional<T> circular_buffer<T>::pop_back()
 {
     if (_start == _end) { return {}; }
 
@@ -198,7 +206,8 @@ template <class T> std::optional<T> circular_buffer<T>::pop_back()
     return result;
 }
 
-template <class T> std::optional<T> circular_buffer<T>::pop_front()
+template <class T>
+std::optional<T> circular_buffer<T>::pop_front()
 {
     if (_start == _end) { return {}; }
 
@@ -210,12 +219,14 @@ template <class T> std::optional<T> circular_buffer<T>::pop_front()
 
 
 // SIZE AND CAPACITY !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-template <class T> size_t circular_buffer<T>::size() const
+template <class T>
+size_t circular_buffer<T>::size() const
 {
     return _end - _start;
 }
 
-template <class T> size_t circular_buffer<T>::capacity() const
+template <class T>
+size_t circular_buffer<T>::capacity() const
 {
     return _bitmask + 1;
 }
@@ -229,10 +240,11 @@ size_t circular_buffer<T>::compare_offsets(size_t lhs, size_t rhs) const
     return (lhs < rhs) ? -1 : 1;
 }
 
-template <class T> void circular_buffer<T>::grow()
+template <class T>
+void circular_buffer<T>::grow()
 {
     auto nbitmask = (_bitmask << 1) + 1;
-    auto nbuffer  = new T[nbitmask + 1];
+    auto nbuffer  = static_cast<T*>(malloc(sizeof(T) * (nbitmask + 1)));
 
     size_t i = 0;
     for (iterator it = begin(); it != end(); ++it)
@@ -240,6 +252,7 @@ template <class T> void circular_buffer<T>::grow()
         nbuffer[i++] = std::move(*it);
         it->~T();
     }
+    std::fill(nbuffer + i, nbuffer + nbitmask + 1, T());
 
     free(_buffer);
     _start   = 0;
@@ -248,7 +261,8 @@ template <class T> void circular_buffer<T>::grow()
     _buffer  = nbuffer;
 }
 
-template <class T> void circular_buffer<T>::cleanup()
+template <class T>
+void circular_buffer<T>::cleanup()
 {
     for (iterator it = begin(); it != end(); ++it) { it->~T(); }
     _start = _end = 0;

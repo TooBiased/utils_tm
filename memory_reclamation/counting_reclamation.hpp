@@ -157,7 +157,7 @@ counting_manager<T, D, Q>::~counting_manager()
 {
     // no concurrency possible thus no mutex necessary
     // std::lock_guard<std::mutex> guard(_freelist_mutex);
-    for (auto ptr : _freelist) free(ptr, sizeof(internal_type));
+    for (auto ptr : _freelist) free(ptr);
 }
 
 template <class T, class D, template <class> class Q>
