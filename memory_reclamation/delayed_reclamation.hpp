@@ -14,13 +14,12 @@ namespace utils_tm
 namespace reclamation_tm
 {
 
-namespace ctm = concurrency_tm;
-
 template <class T> // Should probably have a default parameter for D
 class delayed_manager
 {
   private:
     using this_type = delayed_manager<T>;
+    using memo      = concurrency_tm::standard_memory_order_policy;
 
   public:
     using pointer_type        = T*;
@@ -106,7 +105,7 @@ template <class T>
 T* delayed_manager<T>::handle_type::protect(
     const atomic_pointer_type& ptr) const
 {
-    return ptr.load(ctm::mo_acquire);
+    return ptr.load(memo::acquire);
 }
 
 template <class T>

@@ -11,13 +11,12 @@
 namespace utils_tm
 {
 
-namespace ctm = concurrency_tm;
-
 template <class T>
 class concurrent_circular_buffer
 {
   private:
     using this_type = concurrent_circular_buffer<T>;
+    using memo      = concurrency_tm::standard_memory_order_policy;
 
     size_t                            _bitmask;
     std::unique_ptr<std::atomic<T>[]> _buffer;
@@ -96,11 +95,11 @@ concurrent_circular_buffer<T>::~concurrent_circular_buffer()
 template <class T>
 void concurrent_circular_buffer<T>::push(T e)
 {
-    auto id = _push_id.fetch_add(1, ctm::mo_acquire);
+    auto id = _push_id.fetch_add(1, memo::acquire);
     id      = mod(id + 1);
 
     auto temp = T();
-    while (!_buffer[id].compare_exchange_weak(temp, e, ctm::mo_release))
+    while (!_buffer[id].compare_exchange_weak(temp, e, memo::release))
     {
         temp = T();
     }
@@ -109,11 +108,11 @@ void concurrent_circular_buffer<T>::push(T e)
 template <class T>
 T concurrent_circular_buffer<T>::pop()
 {
-    auto id = _pop_id.fetch_add(1, ctm::mo_acquire);
+    auto id = _pop_id.fetch_add(1, memo::acquire);
     id      = mod(id + 1);
 
-    auto temp = _buffer[id].exchange(T(), ctm::mo_acq_rel);
-    while (temp == T()) { temp = _buffer[id].exchange(T(), ctm::mo_acq_rel); }
+    auto temp = _buffer[id].exchange(T(), memo::acq_rel);
+    while (temp == T()) { temp = _buffer[id].exchange(T(), memo::acq_rel); }
     return temp;
 }
 
@@ -129,7 +128,7 @@ size_t concurrent_circular_buffer<T>::capacity() const
 template <class T>
 size_t concurrent_circular_buffer<T>::size() const
 {
-    return _push_id.load(ctm::mo_relaxed) - _pop_id.load(ctm::mo_relaxed);
+    return _push_id.load(memo::relaxed) - _pop_id.load(memo::relaxed);
 }
 
 
@@ -144,7 +143,7 @@ void concurrent_circular_buffer<T>::clear()
     // std::fill(non_atomic_view, non_atomic_view + _bitmask + 1, T());
 
     for (size_t i = 0; i < capacity(); ++i)
-        _buffer[i].store(T(), ctm::mo_relaxed);
+        _buffer[i].store(T(), memo::relaxed);
     _push_id.store(0);
     _pop_id.store(0);
 }

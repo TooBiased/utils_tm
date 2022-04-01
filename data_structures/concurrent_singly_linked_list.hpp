@@ -8,13 +8,12 @@
 namespace utils_tm
 {
 
-namespace ctm = concurrency_tm;
-
 template <class T>
 class concurrent_singly_linked_list
 {
   private:
     using this_type = concurrent_singly_linked_list<T>;
+    using memo      = concurrency_tm::standard_memory_order_policy;
 
     class queue_item_type
     {
@@ -102,8 +101,8 @@ template <class T>
 concurrent_singly_linked_list<T>::concurrent_singly_linked_list(
     concurrent_singly_linked_list&& source)
 {
-    auto temp = source._head.exchange(nullptr, ctm::mo_acq_rel);
-    _head.store(temp, ctm::mo_relaxed);
+    auto temp = source._head.exchange(nullptr, memo::acq_rel);
+    _head.store(temp, memo::relaxed);
 }
 
 template <class T>
@@ -119,10 +118,10 @@ concurrent_singly_linked_list<T>& concurrent_singly_linked_list<T>::operator=(
 template <class T>
 concurrent_singly_linked_list<T>::~concurrent_singly_linked_list()
 {
-    auto temp = _head.exchange(nullptr, ctm::mo_relaxed);
+    auto temp = _head.exchange(nullptr, memo::relaxed);
     while (temp)
     {
-        auto next = temp->next.load(ctm::mo_relaxed);
+        auto next = temp->next.load(memo::relaxed);
         delete temp;
         temp = next;
     }
@@ -148,10 +147,10 @@ void concurrent_singly_linked_list<T>::push(const T& element)
 template <class T>
 void concurrent_singly_linked_list<T>::push(queue_item_type* item)
 {
-    auto temp = _head.load(ctm::mo_acquire);
+    auto temp = _head.load(memo::acquire);
     do {
-        item->next.store(temp, ctm::mo_relaxed);
-    } while (!_head.compare_exchange_weak(temp, item, ctm::mo_acq_rel));
+        item->next.store(temp, memo::relaxed);
+    } while (!_head.compare_exchange_weak(temp, item, memo::acq_rel));
 }
 
 
@@ -184,7 +183,7 @@ template <class T>
 typename concurrent_singly_linked_list<T>::iterator_type
 concurrent_singly_linked_list<T>::begin()
 {
-    return iterator_type(_head.load(ctm::mo_acquire));
+    return iterator_type(_head.load(memo::acquire));
 }
 
 template <class T>
@@ -198,7 +197,7 @@ template <class T>
 typename concurrent_singly_linked_list<T>::const_iterator_type
 concurrent_singly_linked_list<T>::cbegin() const
 {
-    return const_iterator_type(_head.load(ctm::mo_acquire));
+    return const_iterator_type(_head.load(memo::acquire));
 }
 
 template <class T>
@@ -247,7 +246,7 @@ typename concurrent_singly_linked_list<T>::template iterator_base<
     c>::iterator_base&
 concurrent_singly_linked_list<T>::iterator_base<c>::operator++()
 {
-    _ptr = _ptr->next.load(ctm::mo_acquire);
+    _ptr = _ptr->next.load(memo::acquire);
     return *this;
 }
 
