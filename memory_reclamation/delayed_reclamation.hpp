@@ -4,6 +4,7 @@
 #include <tuple>
 #include <vector>
 
+#include "../concurrency/memory_order.hpp"
 #include "../mark_pointer.hpp"
 #include "../output.hpp"
 #include "reclamation_guard.hpp"
@@ -13,6 +14,7 @@ namespace utils_tm
 namespace reclamation_tm
 {
 
+namespace ctm = concurrency_tm;
 
 template <class T> // Should probably have a default parameter for D
 class delayed_manager
@@ -104,7 +106,7 @@ template <class T>
 T* delayed_manager<T>::handle_type::protect(
     const atomic_pointer_type& ptr) const
 {
-    return ptr.load();
+    return ptr.load(ctm::mo_acquire);
 }
 
 template <class T>

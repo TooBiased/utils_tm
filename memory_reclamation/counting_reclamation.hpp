@@ -5,6 +5,7 @@
 #include <tuple>
 #include <vector>
 
+#include "../concurrency/memory_order.hpp"
 #include "../data_structures/circular_buffer.hpp"
 #include "../debug.hpp"
 #include "../mark_pointer.hpp"
@@ -17,6 +18,8 @@ namespace utils_tm
 {
 namespace reclamation_tm
 {
+
+namespace ctm = concurrency_tm;
 
 template <class T,
           class Destructor             = default_destructor<T>,
@@ -197,13 +200,13 @@ void counting_manager<T, D, Q>::_counted_object::emplace(Args&&... arg)
 template <class T, class D, template <class> class Q>
 void counting_manager<T, D, Q>::_counted_object::increment_counter()
 {
-    _counter.fetch_add(1);
+    _counter.fetch_add(1, ctm::mo_acquire);
 }
 
 template <class T, class D, template <class> class Q>
 bool counting_manager<T, D, Q>::_counted_object::decrement_counter()
 {
-    auto temp = _counter.fetch_sub(1);
+    auto temp = _counter.fetch_sub(ctm::mo_acq_rel);
     debug_tm::if_debug("Warning: in decrement_counter - "
                        "created a negative counter",
                        temp == 0);
@@ -217,7 +220,7 @@ bool counting_manager<T, D, Q>::_counted_object::decrement_counter()
 template <class T, class D, template <class> class Q>
 bool counting_manager<T, D, Q>::_counted_object::mark_deletion()
 {
-    auto temp = _counter.fetch_or(del_flag);
+    auto temp = _counter.fetch_or(del_flag, ctm::mo_acq_rel);
 
     debug_tm::if_debug_critical(
         "Warning: in counting pointer trying to mark a marked pointer",
@@ -229,20 +232,20 @@ bool counting_manager<T, D, Q>::_counted_object::mark_deletion()
 template <class T, class D, template <class> class Q>
 bool counting_manager<T, D, Q>::_counted_object::is_safe()
 {
-    return !_counter.load();
+    return !_counter.load(ctm::mo_acquire);
 }
 
 template <class T, class D, template <class> class Q>
 bool counting_manager<T, D, Q>::_counted_object::reset()
 {
     auto temp = del_flag;
-    return _counter.compare_exchange_strong(temp, 0);
+    return _counter.compare_exchange_strong(temp, 0, ctm::mo_acq_rel);
 }
 
 template <class T, class D, template <class> class Q>
 void counting_manager<T, D, Q>::_counted_object::print() const
 {
-    auto temp = _counter.load();
+    auto temp = _counter.load(ctm::mo_acquire);
     out_tm::out() << ((temp & del_flag) ? "d" : "") //
                   << (temp & (~del_flag)) << std::endl;
 }
@@ -278,10 +281,10 @@ T* counting_manager<T, D, Q>::handle_type::protect(
     const atomic_pointer_type& ptr)
 {
     ++n;
-    auto temp = ptr.load();
+    auto temp = ptr.load(ctm::mo_acquire);
     if (!mark::clear(temp)) return nullptr; // nullptr cannot be protected
     get_iptr(temp)->increment_counter();
-    auto temp2 = ptr.load();
+    auto temp2 = ptr.load(ctm::mo_acquire);
     while (temp != temp2)
     {
         auto itemp = get_iptr(temp);
@@ -289,7 +292,7 @@ T* counting_manager<T, D, Q>::handle_type::protect(
         temp = temp2;
         if (!mark::clear(temp)) return nullptr;
         get_iptr(temp)->increment_counter();
-        temp2 = ptr.load();
+        temp2 = ptr.load(ctm::mo_acquire);
     }
     return temp;
 }

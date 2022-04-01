@@ -2,16 +2,20 @@
 
 #include <atomic>
 
+#include "../concurrency/memory_order.hpp"
 #include "../debug.hpp"
 #include "../mark_pointer.hpp"
 #include "../memory_reclamation/hazard_reclamation.hpp"
 #include "../memory_reclamation/reclamation_guard.hpp"
-namespace mark = utils_tm::mark;
-namespace dtm  = utils_tm::debug_tm;
-namespace rtm  = utils_tm::reclamation_tm;
+
 
 namespace utils_tm
 {
+
+namespace mark = mark;
+namespace dtm  = debug_tm;
+namespace rtm  = reclamation_tm;
+namespace ctm  = concurrency_tm;
 
 template <class Value>
 using hzrd = utils_tm::reclamation_tm::hazard_manager<Value>;
@@ -43,13 +47,14 @@ class protected_singly_linked_list
     using queue_item_ptr = typename reclamation_manager_type::pointer_type;
     using guard_type     = typename reclamation_manager_type::guard_type;
 
-    template <bool is_const> class iterator_base
+    template <bool is_const>
+    class iterator_base
     {
       private:
         using this_type = iterator_base<is_const>;
-        using item_ptr =
-            typename std::conditional<is_const, const queue_item_type*,
-                                      queue_item_type*>::type;
+        using item_ptr  = typename std::conditional<is_const,
+                                                   const queue_item_type*,
+                                                   queue_item_type*>::type;
 
         guard_type _guard;
 
@@ -109,8 +114,10 @@ class protected_singly_linked_list
 
     inline iterator_type       make_iterator(guard_type&& guard);
     inline const_iterator_type make_citerator(guard_type&& guard) const;
-    inline void remove(reclamation_handle_type& h, guard_type& prev,
-                       guard_type& curr, guard_type& next);
+    inline void                remove(reclamation_handle_type& h,
+                                      guard_type&              prev,
+                                      guard_type&              curr,
+                                      guard_type&              next);
 
   public:
     class handle_type
@@ -155,8 +162,8 @@ template <class V, template <class> class R>
 protected_singly_linked_list<V, R>::protected_singly_linked_list(
     protected_singly_linked_list&& source) noexcept
 {
-    auto temp = source._head.exchange(nullptr, std::memory_order_acq_rel);
-    _head.store(temp);
+    auto temp = source._head.exchange(nullptr, ctm::mo_acq_rel);
+    _head.store(temp, ctm::mo_relaxed);
 }
 
 // no concurrent operations (both on source or target)
@@ -175,10 +182,10 @@ protected_singly_linked_list<V, R>::operator=(
 template <class V, template <class> class R>
 protected_singly_linked_list<V, R>::~protected_singly_linked_list()
 {
-    auto temp = _head.exchange(nullptr, std::memory_order_relaxed);
+    auto temp = _head.exchange(nullptr, ctm::mo_relaxed);
     while (temp)
     {
-        auto next = temp->next.load();
+        auto next = temp->next.load(ctm::mo_relaxed);
         delete temp;
         temp = next;
     }
@@ -196,11 +203,10 @@ template <class V, template <class> class R>
 void protected_singly_linked_list<V, R>::push(
     [[maybe_unused]] reclamation_handle_type& h, queue_item_type* item)
 {
-    auto temp = _head.load();
+    auto temp = _head.load(ctm::mo_acquire);
     do {
-        item->next.store(temp, std::memory_order_relaxed);
-    } while (
-        !_head.compare_exchange_weak(temp, item, std::memory_order_acq_rel));
+        item->next.store(temp, ctm::mo_relaxed);
+    } while (!_head.compare_exchange_weak(temp, item, ctm::mo_acq_rel));
 }
 
 template <class V, template <class> class R>
@@ -213,10 +219,10 @@ protected_singly_linked_list<V, R>::push_or_find(reclamation_handle_type& h,
     while (true)
     {
         // the chain is empty -> insert in the beginning
-        while (!_head.load())
+        while (!_head.load(std::memory_order_relaxed))
         {
             queue_item_ptr temp = nullptr;
-            if (_head.compare_exchange_weak(temp, item))
+            if (_head.compare_exchange_weak(temp, item, ctm::mo_release))
                 return make_iterator(std::move(item));
         }
 
@@ -229,8 +235,8 @@ protected_singly_linked_list<V, R>::push_or_find(reclamation_handle_type& h,
         {
             // check if the first link is already correct
             if (curr->value == item->value &&
-                !mark::is_marked(
-                    curr->next.load())) // go on, if it was on it's way out
+                !mark::is_marked(curr->next.load(
+                    ctm::mo_acquire))) // go on, if it was on it's way out
             {
                 h.delete_raw(item.release());
                 return make_iterator(std::move(curr));
@@ -243,7 +249,8 @@ protected_singly_linked_list<V, R>::push_or_find(reclamation_handle_type& h,
             {
                 // -> insert after curr
                 queue_item_ptr temp = nullptr;
-                if (curr->next.compare_exchange_strong(temp, item))
+                if (curr->next.compare_exchange_strong(temp, item,
+                                                       ctm::mo_acq_rel))
                     return make_iterator(std::move(item));
                 continue;
             }
@@ -273,7 +280,7 @@ protected_singly_linked_list<V, R>::erase(reclamation_handle_type& h, V element)
     while (true)
     {
         // the chain is empty -> insert in the beginning
-        while (!_head.load())
+        while (!_head.load(ctm::mo_relaxed))
         {
             // not found
             return 0;
@@ -340,8 +347,8 @@ protected_singly_linked_list<V, R>::find(reclamation_handle_type& h,
         {
             // check if the first link is already correct
             if (curr->value == element &&
-                !mark::is_marked(
-                    curr->next.load())) // go on, if it was on it's way out
+                !mark::is_marked(curr->next.load(
+                    ctm::mo_acquire))) // go on, if it was on it's way out
             {
                 return make_iterator(std::move(curr));
             }
@@ -500,14 +507,17 @@ void protected_singly_linked_list<V, R>::remove(reclamation_handle_type& h,
 
         if (!prev)
         {
-            if (!_head.compare_exchange_strong(ctemp, ntemp)) return;
+            if (!_head.compare_exchange_strong(ctemp, ntemp, ctm::mo_acq_rel))
+                return;
         }
         else
         {
-            if (!prev->next.compare_exchange_strong(ctemp, ntemp)) return;
+            if (!prev->next.compare_exchange_strong(ctemp, ntemp,
+                                                    ctm::mo_acq_rel))
+                return;
         }
 
-        ctemp->next.store(ctemp);
+        ctemp->next.store(ctemp, ctm::mo_release);
         curr = std::move(next);
         h.safe_delete(ctemp);
         if (!ntemp) return;

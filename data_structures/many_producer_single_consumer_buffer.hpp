@@ -5,12 +5,17 @@
 #include <cstddef>
 #include <optional>
 
+#include "../concurrency/memory_order.hpp"
+
 namespace utils_tm
 {
 
+namespace ctm = concurrency_tm;
+
 // This structure is owned by one thread, and is meant to pass inputs
 // to that thread
-template <class T> class many_producer_single_consumer_buffer
+template <class T>
+class many_producer_single_consumer_buffer
 {
   private:
     using this_type = many_producer_single_consumer_buffer<T>;
@@ -30,7 +35,10 @@ template <class T> class many_producer_single_consumer_buffer
     {
         _buffer = new std::atomic<T>[2 * capacity];
 
-        for (size_t i = 0; i < 2 * capacity; ++i) { _buffer[i].store(T()); }
+        for (size_t i = 0; i < 2 * capacity; ++i)
+        {
+            _buffer[i].store(T(), ctm::mo_relaxed);
+        }
     }
 
     many_producer_single_consumer_buffer(
@@ -39,7 +47,7 @@ template <class T> class many_producer_single_consumer_buffer
     operator=(const many_producer_single_consumer_buffer&) = delete;
     many_producer_single_consumer_buffer(
         many_producer_single_consumer_buffer&& other)
-        : _capacity(other._capacity), _pos(other._pos.load()),
+        : _capacity(other._capacity), _pos(other._pos.load(ctm::mo_relaxed)),
           _read_pos(other._read_pos), _read_end(other._read_end)
     {
         _buffer       = other._buffer;
@@ -61,7 +69,7 @@ template <class T> class many_producer_single_consumer_buffer
     // returns false if the buffer is full
     bool push_back(const T& e)
     {
-        auto tpos = _pos.fetch_add(1);
+        auto tpos = _pos.fetch_add(1, ctm::mo_acq_rel);
 
         if (tpos & _scnd_buffer_flag)
         {
@@ -71,7 +79,7 @@ template <class T> class many_producer_single_consumer_buffer
         else if (tpos >= _capacity)
             return false;
 
-        _buffer[tpos].store(e);
+        _buffer[tpos].store(e, ctm::mo_relaxed);
         return true;
     }
 
@@ -81,7 +89,7 @@ template <class T> class many_producer_single_consumer_buffer
     {
         if (number == 0) number = end - start;
 
-        size_t tpos   = _pos.fetch_add(number);
+        size_t tpos   = _pos.fetch_add(number, ctm::mo_acq_rel);
         size_t endpos = 0;
         if (tpos & _scnd_buffer_flag)
         {
@@ -95,7 +103,7 @@ template <class T> class many_producer_single_consumer_buffer
 
         for (; tpos < endpos; ++tpos)
         {
-            _buffer[tpos]->store(*start);
+            _buffer[tpos]->store(*start, ctm::mo_release);
             start++;
         }
         return number;
@@ -110,9 +118,9 @@ template <class T> class many_producer_single_consumer_buffer
             fetch_on_empty_read_buffer();
             if (_read_pos == _read_end) return {};
         }
-        auto read = _buffer[_read_pos].load();
-        while (read == T()) read = _buffer[_read_pos].load();
-        _buffer[_read_pos].store(T());
+        auto read = _buffer[_read_pos].load(ctm::mo_relaxed);
+        while (read == T()) read = _buffer[_read_pos].load(ctm::mo_relaxed);
+        _buffer[_read_pos].store(T(), ctm::mo_relaxed);
         ++_read_pos;
         return std::make_optional(read);
     }
@@ -120,16 +128,18 @@ template <class T> class many_producer_single_consumer_buffer
   private:
     void fetch_on_empty_read_buffer()
     {
-        bool first_to_second = !(_scnd_buffer_flag & _pos.load());
+        bool first_to_second =
+            !(_scnd_buffer_flag & _pos.load(ctm::mo_relaxed));
         if (first_to_second)
         {
-            _read_end = _pos.exchange(_capacity | _scnd_buffer_flag);
+            _read_end =
+                _pos.exchange(_capacity | _scnd_buffer_flag, ctm::mo_acq_rel);
             _read_end = std::min(_read_end, _capacity);
             _read_pos = 0;
         }
         else
         {
-            _read_end = _pos.exchange(0);
+            _read_end = _pos.exchange(0, ctm::mo_acq_rel);
             _read_end ^= _scnd_buffer_flag;
             _read_end = std::min(_read_end, 2 * _capacity);
             _read_pos = _capacity;

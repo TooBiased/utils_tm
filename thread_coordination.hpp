@@ -22,6 +22,7 @@
 #include <thread>
 #include <type_traits>
 
+#include "../concurrency/memory_order.hpp"
 #include "output.hpp"
 
 namespace utils_tm
@@ -29,6 +30,7 @@ namespace utils_tm
 namespace thread_tm
 {
 
+namespace ctm = concurrency_tm;
 
 // EXAMPLE USE
 
@@ -108,7 +110,8 @@ static std::atomic_size_t wait_end;
 static std::atomic_size_t wait_start;
 
 // MAIN THREAD CLASS ***********************************************************
-template <bool timed> struct main_thread
+template <bool timed>
+struct main_thread
 {
     main_thread(size_t p, size_t id) : p(p), id(id), _stage(0) {}
 
@@ -138,23 +141,22 @@ template <bool timed> struct main_thread
 
     inline void start_stage(size_t p, size_t lvl)
     {
-        while (wait_start.load(std::memory_order_acquire) < p)
-            ;
-        wait_start.store(0, std::memory_order_release);
+        while (wait_start.load(ctm::mo_acquire) < p) { /* WATING */ }
+        wait_start.store(0, ctm::mo_release);
 
         if constexpr (timed)
         {
             start_time = std::chrono::high_resolution_clock::now();
         }
 
-        level.store(lvl, std::memory_order_release);
+        level.store(lvl, ctm::mo_release);
     }
 
     inline size_t end_stage(size_t p, size_t lvl)
     {
-        while (wait_end.load(std::memory_order_acquire) < p)
+        while (wait_end.load(ctm::mo_acquire) < p)
             ;
-        wait_end.store(0, std::memory_order_release);
+        wait_end.store(0, ctm::mo_release);
         size_t result = 0;
         if constexpr (timed)
         {
@@ -162,7 +164,7 @@ template <bool timed> struct main_thread
                          std::chrono::high_resolution_clock::now() - start_time)
                          .count();
         }
-        level.store(lvl);
+        level.store(lvl, ctm::mo_release);
         return result;
     }
 };
@@ -173,7 +175,8 @@ using untimed_main_thread = main_thread<false>;
 
 
 // SUB THREAD CLASS ************************************************************
-template <bool timed> struct sub_thread
+template <bool timed>
+struct sub_thread
 {
     sub_thread(size_t p, size_t id) : p(p), id(id), _stage(0) { out.disable(); }
 
@@ -204,8 +207,8 @@ template <bool timed> struct sub_thread
 
     inline void start_stage(size_t lvl)
     {
-        wait_start.fetch_add(1, std::memory_order_acq_rel);
-        while (level.load(std::memory_order_acquire) < lvl)
+        wait_start.fetch_add(1, ctm::mo_acq_rel);
+        while (level.load(ctm::mo_acquire) < lvl)
         { /* wait */
         }
         if constexpr (timed)
@@ -216,7 +219,7 @@ template <bool timed> struct sub_thread
 
     inline size_t end_stage(size_t lvl)
     {
-        wait_end.fetch_add(1, std::memory_order_acq_rel);
+        wait_end.fetch_add(1, ctm::mo_acq_rel);
 
         size_t result = 0;
         if constexpr (timed)
@@ -226,7 +229,7 @@ template <bool timed> struct sub_thread
                          .count();
         }
 
-        while (level.load(std::memory_order_acquire) < lvl)
+        while (level.load(ctm::mo_acquire) < lvl)
         { /* wait */
         }
 
@@ -275,8 +278,10 @@ static const size_t block_size = 4096;
 
 // BLOCKWISE EXECUTION IN PARALLEL
 template <typename Functor, typename... Types>
-inline void execute_parallel(std::atomic_size_t& global_counter, size_t e,
-                             Functor f, Types&&... param)
+inline void execute_parallel(std::atomic_size_t& global_counter,
+                             size_t              e,
+                             Functor             f,
+                             Types&&... param)
 {
     auto c_s = global_counter.fetch_add(block_size);
     while (c_s < e)
@@ -289,7 +294,9 @@ inline void execute_parallel(std::atomic_size_t& global_counter, size_t e,
 
 template <typename Functor, typename... Types>
 inline void execute_blockwise_parallel(std::atomic_size_t& global_counter,
-                                       size_t e, Functor f, Types&&... param)
+                                       size_t              e,
+                                       Functor             f,
+                                       Types&&... param)
 {
     auto c_s = global_counter.fetch_add(block_size);
     while (c_s < e)

@@ -6,9 +6,15 @@
 #include <cstddef>
 #include <memory>
 
+#include "../concurrency/memory_order.hpp"
+
 namespace utils_tm
 {
-template <class T> class concurrent_circular_buffer
+
+namespace ctm = concurrency_tm;
+
+template <class T>
+class concurrent_circular_buffer
 {
   private:
     using this_type = concurrent_circular_buffer<T>;
@@ -76,7 +82,8 @@ concurrent_circular_buffer<T>::operator=(concurrent_circular_buffer&& other)
     return *this;
 }
 
-template <class T> concurrent_circular_buffer<T>::~concurrent_circular_buffer()
+template <class T>
+concurrent_circular_buffer<T>::~concurrent_circular_buffer()
 {
     // clear();
     // free(_buffer);
@@ -86,50 +93,50 @@ template <class T> concurrent_circular_buffer<T>::~concurrent_circular_buffer()
 
 
 // MAIN FUNCTIONALITY !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-template <class T> void concurrent_circular_buffer<T>::push(T e)
+template <class T>
+void concurrent_circular_buffer<T>::push(T e)
 {
-    auto id = _push_id.fetch_add(1, std::memory_order_acquire);
+    auto id = _push_id.fetch_add(1, ctm::mo_acquire);
     id      = mod(id + 1);
 
     auto temp = T();
-    while (
-        !_buffer[id].compare_exchange_weak(temp, e, std::memory_order_release))
+    while (!_buffer[id].compare_exchange_weak(temp, e, ctm::mo_release))
     {
         temp = T();
     }
 }
 
-template <class T> T concurrent_circular_buffer<T>::pop()
+template <class T>
+T concurrent_circular_buffer<T>::pop()
 {
-    auto id = _pop_id.fetch_add(1, std::memory_order_acquire);
+    auto id = _pop_id.fetch_add(1, ctm::mo_acquire);
     id      = mod(id + 1);
 
-    auto temp = _buffer[id].exchange(T(), std::memory_order_acq_rel);
-    while (temp == T())
-    {
-        temp = _buffer[id].exchange(T(), std::memory_order_acq_rel);
-    }
+    auto temp = _buffer[id].exchange(T(), ctm::mo_acq_rel);
+    while (temp == T()) { temp = _buffer[id].exchange(T(), ctm::mo_acq_rel); }
     return temp;
 }
 
 
 // SIZE AND CAPACITY !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-template <class T> size_t concurrent_circular_buffer<T>::capacity() const
+template <class T>
+size_t concurrent_circular_buffer<T>::capacity() const
 {
     return _bitmask + 1;
 }
 
-template <class T> size_t concurrent_circular_buffer<T>::size() const
+template <class T>
+size_t concurrent_circular_buffer<T>::size() const
 {
-    return _push_id.load(std::memory_order_relaxed) -
-           _pop_id.load(std::memory_order_relaxed);
+    return _push_id.load(ctm::mo_relaxed) - _pop_id.load(ctm::mo_relaxed);
 }
 
 
 // HELPER FUNCTIONS !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-template <class T> void concurrent_circular_buffer<T>::clear()
+template <class T>
+void concurrent_circular_buffer<T>::clear()
 {
     // This should be fine although not standard compatible
     // Also, this works only for POD objects
@@ -137,7 +144,7 @@ template <class T> void concurrent_circular_buffer<T>::clear()
     // std::fill(non_atomic_view, non_atomic_view + _bitmask + 1, T());
 
     for (size_t i = 0; i < capacity(); ++i)
-        _buffer[i].store(T(), std::memory_order_relaxed);
+        _buffer[i].store(T(), ctm::mo_relaxed);
     _push_id.store(0);
     _pop_id.store(0);
 }
