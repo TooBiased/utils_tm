@@ -47,7 +47,7 @@ class hazard_manager
     hazard_manager(Destructor&& destructor = Destructor())
         : _destructor(std::move(destructor)), _handle_counter(-1)
     {
-        for (auto& a : _handles) a.store(nullptr);
+        for (auto& a : _handles) a.store(nullptr, std::memory_order_relaxed);
     }
     hazard_manager(const hazard_manager&) = delete;
     hazard_manager& operator=(const hazard_manager&) = delete;
@@ -66,7 +66,8 @@ class hazard_manager
 
         internal_handle() : _counter(0)
         {
-            for (size_t i = 0; i < maxProtections; ++i) _ptr[i].store(nullptr);
+            for (size_t i = 0; i < maxProtections; ++i)
+                _ptr[i].store(nullptr, std::memory_order_relaxed);
         }
 
         std::atomic_int     _counter;
@@ -151,10 +152,10 @@ class hazard_manager
 template <class T, class D, size_t mt, size_t mp>
 hazard_manager<T, D, mt, mp>::~hazard_manager()
 {
-    auto counter = _handle_counter.load();
+    auto counter = _handle_counter.load(std::memory_order_acquire);
     for (int i = counter; i >= 0; --i)
     {
-        auto temp = _handles[i].load();
+        auto temp = _handles[i].load(std::memory_order_acquire);
         while (!mark::get_mark<0>(temp))
         { /* wait for heandles to be destroyed */
         }
@@ -162,7 +163,7 @@ hazard_manager<T, D, mt, mp>::~hazard_manager()
 
     for (int i = counter; i >= 0; --i)
     {
-        delete mark::clear(_handles[i].load());
+        delete mark::clear(_handles[i].load(std::memory_order_acquire));
     }
 }
 
@@ -176,21 +177,25 @@ hazard_manager<T, D, mt, mp>::get_handle()
     int i = 0;
     for (; i < int(mt); ++i)
     {
-        temp1 = _handles[i].load();
+        temp1 = _handles[i].load(std::memory_order_acquire);
 
         if (!temp1)
         {
-            if (_handles[i].compare_exchange_strong(temp1, temp0))
+            if (_handles[i].compare_exchange_strong(temp1, temp0,
+                                                    std::memory_order_acq_rel))
             {
-                auto b = _handle_counter.load();
-                while (b < i) _handle_counter.compare_exchange_weak(b, i);
+                auto b = _handle_counter.load(std::memory_order_acquire);
+                while (b < i)
+                    _handle_counter.compare_exchange_weak(
+                        b, i, std::memory_order_acq_rel);
                 return handle_type(*this, *temp0, i);
             }
         }
         if (mark::get_mark<0>(temp1))
         {
             // reuse old handle
-            if (_handles[i].compare_exchange_strong(temp1, mark::clear(temp1)))
+            if (_handles[i].compare_exchange_strong(temp1, mark::clear(temp1),
+                                                    std::memory_order_acq_rel))
             {
                 delete temp0;
                 return handle_type(*this, *mark::clear(temp1), i);
@@ -212,11 +217,13 @@ void hazard_manager<T, D, mt, mp>::delete_raw(pointer_type ptr)
 template <class T, class D, size_t mt, size_t mp>
 void hazard_manager<T, D, mt, mp>::print() const
 {
-    otm::out() << "hazard manager print: " << _handle_counter.load() + 1
+    otm::out() << "hazard manager print: "
+               << _handle_counter.load(std::memory_order_acquire) + 1
                << "handles" << std::endl;
     for (size_t i = 0; i < mt; ++i)
     {
-        otm::out() << i << ": " << _handles[i].load() << std::endl;
+        otm::out() << i << ": " << _handles[i].load(std::memory_order_acquire)
+                   << std::endl;
     }
 }
 
@@ -227,7 +234,7 @@ void hazard_manager<T, D, mt, mp>::print() const
 template <class T, class D, size_t mt, size_t mp>
 int hazard_manager<T, D, mt, mp>::internal_handle::insert(pointer_type ptr)
 {
-    auto pos = _counter.fetch_add(1);
+    auto pos = _counter.fetch_add(1, std::memory_order_acquire);
     dtm::if_debug_critical("Error: in insert -- "
                            "too many protected pointers",
                            pos >= int(mp));
@@ -235,7 +242,7 @@ int hazard_manager<T, D, mt, mp>::internal_handle::insert(pointer_type ptr)
                            "below 0 protected pointers",
                            pos < 0);
 
-    _ptr[pos].store(ptr);
+    _ptr[pos].store(ptr, std::memory_order_release);
     return pos;
 }
 
@@ -246,7 +253,7 @@ hazard_manager<T, D, mt, mp>::internal_handle::remove(pointer_type ptr)
     auto pos = find(ptr);
     if (pos < 0) { return std::make_pair(istate::NOT_FOUND, -1); }
 
-    auto tsize = _counter.load();
+    auto tsize = _counter.load(std::memory_order_acquire);
     dtm::if_debug_critical("Error: in remove -- "
                            "too many protected pointers",
                            tsize > int(mp));
@@ -261,7 +268,7 @@ hazard_manager<T, D, mt, mp>::internal_handle::remove(pointer_type ptr)
     {
         // removing the last element -> no swap necessary
         _counter.fetch_sub(1);
-        auto temp = _ptr[pos].exchange(nullptr);
+        auto temp = _ptr[pos].exchange(nullptr, std::memory_order_acq_rel);
         dtm::if_debug("Warning: in rec handle remove"
                       " -- removing last element changed",
                       mark::clear(temp) != ptr);
@@ -269,7 +276,7 @@ hazard_manager<T, D, mt, mp>::internal_handle::remove(pointer_type ptr)
             (mark::get_mark<0>(temp)) ? istate::MARKED : istate::UNMARKED, pos);
     }
 
-    auto last_ptr = _ptr[tsize - 1].load();
+    auto last_ptr = _ptr[tsize - 1].load(std::memory_order_acquire);
     auto temp     = _ptr[pos].exchange(last_ptr);
 
     dtm::if_debug("Warning: in rec handle remove"
@@ -285,7 +292,7 @@ hazard_manager<T, D, mt, mp>::internal_handle::remove(pointer_type ptr)
         dtm::if_debug("Warning: in rec handle remove"
                       " -- last element changed",
                       mark::clear(temp) != last_ptr);
-        _ptr[pos].store(temp);
+        _ptr[pos].store(temp, std::memory_order_release);
     }
 
     return std::make_pair(was_marked ? istate::MARKED : istate::UNMARKED, pos);
@@ -305,14 +312,14 @@ typename hazard_manager<T, D, mt, mp>::internal_handle::istate
 hazard_manager<T, D, mt, mp>::internal_handle::mark(pointer_type ptr, int pos)
 {
     auto temp = pos;
-    if (pos < 0) temp = _counter.load() - 1;
+    if (pos < 0) temp = _counter.load(std::memory_order_acquire) - 1;
     dtm::if_debug("Error: in mark -- "
                   "pos larger than expected",
                   temp >= int(mp));
 
     for (int i = temp; i >= 0; i--)
     {
-        auto temp = _ptr[i].load();
+        auto temp = _ptr[i].load(std::memory_order_acquire);
         if (mark::clear(temp) == ptr)
         {
             // was marked before -> stays
@@ -333,7 +340,7 @@ hazard_manager<T, D, mt, mp>::internal_handle::mark(pointer_type ptr, int pos)
 template <class T, class D, size_t mt, size_t mp>
 int hazard_manager<T, D, mt, mp>::internal_handle::find(pointer_type ptr) const
 {
-    auto temp = _counter.load();
+    auto temp = _counter.load(std::memory_order_acquire);
     dtm::if_debug("Error: in find -- "
                   "too many current elements",
                   temp > int(mp));
@@ -344,7 +351,8 @@ int hazard_manager<T, D, mt, mp>::internal_handle::find(pointer_type ptr) const
 
     for (int i = temp - 1; i >= 0; i--)
     {
-        if (mark::clear(_ptr[i].load()) == ptr) return i;
+        if (mark::clear(_ptr[i].load(std::memory_order_acquire)) == ptr)
+            return i;
     }
     return -1;
 }
@@ -353,7 +361,7 @@ template <class T, class D, size_t mt, size_t mp>
 void hazard_manager<T, D, mt, mp>::internal_handle::print() const
 {
 
-    auto temp = _counter.load();
+    auto temp = _counter.load(std::memory_order_acquire);
     std::cout << "counter is:" << temp << std::endl;
     for (int i = temp + 2; i >= 0; i--) { std::cout << _ptr[i] << std::endl; };
 }
@@ -392,14 +400,16 @@ hazard_manager<T, D, mt, mp>::handle_type::~handle_type()
 {
     if (_id < 0) return;
 
-    for (int i = _internal._counter.load() - 1; i >= 0; --i)
+    for (int i = _internal._counter.load(std::memory_order_acquire) - 1; i >= 0;
+         --i)
     {
         auto temp = _internal._ptr[i].exchange(nullptr);
         if (mark::get_mark<0>(temp)) continue_deletion(mark::clear(temp), i);
     }
-    _internal._counter.store(0);
+    _internal._counter.store(0, std::memory_order_release);
 
-    _parent._handles[_id].store(mark::mark<0>(&_internal));
+    _parent._handles[_id].store(mark::mark<0>(&_internal),
+                                std::memory_order_release);
 }
 
 
@@ -419,11 +429,11 @@ T* hazard_manager<T, D, mt, mp>::handle_type::protect(
     const atomic_pointer_type& ptr)
 {
     ++n;
-    auto temp0 = ptr.load();
+    auto temp0 = ptr.load(std::memory_order_acquire);
     if (!mark::clear(temp0)) return temp0;
     temp0      = mark::clear(temp0);
     auto pos   = _internal.insert(temp0);
-    auto temp1 = ptr.load();
+    auto temp1 = ptr.load(std::memory_order_acquire);
     while (temp0 != mark::clear(temp1))
     {
         auto state = _internal.replace(pos, mark::clear(temp1));
@@ -437,7 +447,7 @@ T* hazard_manager<T, D, mt, mp>::handle_type::protect(
             return nullptr;
         }
         temp0 = temp1;
-        temp1 = ptr.load();
+        temp1 = ptr.load(std::memory_order_acquire);
     }
     return temp1;
 }
@@ -486,9 +496,10 @@ template <class T, class D, size_t mt, size_t mp>
 void hazard_manager<T, D, mt, mp>::handle_type::safe_delete(pointer_type ptr)
 {
     auto cptr = mark::clear(ptr);
-    for (int i = _parent._handle_counter.load(); i >= 0; --i)
+    for (int i = _parent._handle_counter.load(std::memory_order_acquire);
+         i >= 0; --i)
     {
-        auto temp_handle = _parent._handles[i].load();
+        auto temp_handle = _parent._handles[i].load(std::memory_order_acquire);
         if (mark::get_mark<0>(temp_handle)) continue;
         if (temp_handle->mark(cptr) != istate::NOT_FOUND) return;
     }
@@ -507,9 +518,10 @@ template <class T, class D, size_t mt, size_t mp>
 bool hazard_manager<T, D, mt, mp>::handle_type::is_safe(pointer_type ptr)
 {
     auto cptr = mark::clear(ptr);
-    for (int i = _parent._handle_counter.load(); i >= 0; --i)
+    for (int i = _parent._handle_counter.load(std::memory_order_acquire);
+         i >= 0; --i)
     {
-        auto temp_handle = _parent._handles[i].load();
+        auto temp_handle = _parent._handles[i].load(std::memory_order_acquire);
         if (mark::get_mark<0>(temp_handle)) continue;
         if (temp_handle->find(cptr) != -1) return false;
     }
@@ -520,9 +532,10 @@ template <class T, class D, size_t mt, size_t mp>
 void hazard_manager<T, D, mt, mp>::handle_type::print(pointer_type ptr)
 {
     auto cptr = mark::clear(ptr);
-    for (int i = _parent._handle_counter.load(); i >= 0; --i)
+    for (int i = _parent._handle_counter.load(std::memory_order_acquire);
+         i >= 0; --i)
     {
-        auto temp_handle = _parent._handles[i].load();
+        auto temp_handle = _parent._handles[i].load(std::memory_order_acquire);
         if (mark::get_mark<0>(temp_handle)) continue;
         if (temp_handle->find(cptr) != -1)
             otm::out() << "element is protected in handle " << i << std::endl;
@@ -539,7 +552,7 @@ void hazard_manager<T, D, mt, mp>::handle_type::continue_deletion(
 
     for (int i = _id - 1; i >= 0; --i)
     {
-        auto temp_handle = _parent._handles[i].load();
+        auto temp_handle = _parent._handles[i].load(std::memory_order_acquire);
         if (mark::get_mark<0>(temp_handle)) continue;
         if (temp_handle->mark(ptr) != istate::NOT_FOUND) return;
     }
@@ -551,8 +564,8 @@ template <class T, class D, size_t mt, size_t mp>
 void hazard_manager<T, D, mt, mp>::handle_type::print() const
 {
     out_tm::out() << "* print in hazard reclamation handle "
-                  << _internal._counter.load() << " pointer protected *"
-                  << std::endl;
+                  << _internal._counter.load(std::memory_order_acquire)
+                  << " pointer protected *" << std::endl;
 }
 
 } // namespace reclamation_tm
