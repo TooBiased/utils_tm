@@ -21,7 +21,7 @@
 #include <atomic>
 #include <cstddef>
 
-#include "../concurrency/memory_order.hpp"
+#include "concurrency/memory_order.hpp"
 
 namespace utils_tm
 {
