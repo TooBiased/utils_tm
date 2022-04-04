@@ -22,7 +22,7 @@
 #include <thread>
 #include <type_traits>
 
-#include "../concurrency/memory_order.hpp"
+#include "concurrency/memory_order.hpp"
 #include "output.hpp"
 
 namespace utils_tm
@@ -141,7 +141,9 @@ struct main_thread
 
     inline void start_stage(size_t p, size_t lvl)
     {
-        while (wait_start.load(ctm::mo_acquire) < p) { /* WATING */ }
+        while (wait_start.load(ctm::mo_acquire) < p)
+        { /* WATING */
+        }
         wait_start.store(0, ctm::mo_release);
 
         if constexpr (timed)
