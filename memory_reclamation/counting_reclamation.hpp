@@ -208,7 +208,7 @@ void counting_manager<T, D, Q>::_counted_object::increment_counter()
 template <class T, class D, template <class> class Q>
 bool counting_manager<T, D, Q>::_counted_object::decrement_counter()
 {
-    auto temp = _counter.fetch_sub(memo::acq_rel);
+    auto temp = _counter.fetch_sub(1, memo::acq_rel);
     debug_tm::if_debug("Warning: in decrement_counter - "
                        "created a negative counter",
                        temp == 0);
