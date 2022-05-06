@@ -129,9 +129,9 @@ class locally_buffered_output
 
   public:
     locally_buffered_output(stream_type& out) : _out(out) {}
-    locally_buffered_output(const locally_buffered_output&) = delete;
+    locally_buffered_output(const locally_buffered_output&)            = delete;
     locally_buffered_output& operator=(const locally_buffered_output&) = delete;
-    locally_buffered_output(locally_buffered_output&&) = default;
+    locally_buffered_output(locally_buffered_output&&)            = default;
     locally_buffered_output& operator=(locally_buffered_output&&) = default;
     ~locally_buffered_output() { _out << _buffer.str() << std::flush; }
 
@@ -228,6 +228,37 @@ inline std::ostream& operator<<(std::ostream& o, width w)
 }
 
 
+// EXPECTED OUTPUTS (IE UNEXPECTED VALUES WILL RESULT IN COLORED OUTPUTS) ******
+
+template <class T>
+class expected
+{
+  private:
+    const T& _value;
+    const T& _expectation;
+    color    _color;
+
+  public:
+    expected(const T& value, const T& expectation, color wcolor = color::red)
+        : _value(value), _expectation(expectation), _color(wcolor)
+    {
+    }
+
+    template <class U>
+    friend std::ostream& operator<<(std::ostream& o, expected<U> e);
+};
+
+template <class T>
+inline std::ostream& operator<<(std::ostream& o, expected<T> e)
+{
+    if (e._value == e._expectation)
+        o << e._value;
+    else
+        o << e._color << e._value << color::reset;
+    return o;
+}
+
+
 
 
 // PRINT BITS STUFF ************************************************************
@@ -259,7 +290,7 @@ std::string hex_print(int_type t)
 {
     constexpr size_t length  = sizeof(int_type) * 8;
     constexpr char   table[] = {'0', '1', '2', '3', '4', '5', '6', '7',
-                              '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
+                                '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
 
     std::ostringstream buffer;
     int                shift = length - 4;
