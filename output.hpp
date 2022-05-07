@@ -206,60 +206,218 @@ inline std::ostream& operator<<(std::ostream& o, color c)
     return o;
 }
 
-
-
-
 // CONTROLS THE WIDTH OF THE OUTPUT ********************************************
-class width
+class width_type
 {
   public:
-    width(size_t w) : _w(w) {}
+    explicit width_type(size_t width = 0) : _width(width) {}
+
+    size_t get_width() { return _width; }
 
   private:
-    size_t _w;
-
-    friend std::ostream& operator<<(std::ostream& o, width w);
+    size_t _width;
 };
 
-inline std::ostream& operator<<(std::ostream& o, width w)
+inline width_type width(size_t w) { return width_type(w); }
+
+inline std::ostream& operator<<(std::ostream& o, width_type w)
 {
-    o.width(w._w);
+    o.width(w.get_width());
     return o;
 }
 
 
-// EXPECTED OUTPUTS (IE UNEXPECTED VALUES WILL RESULT IN COLORED OUTPUTS) ******
-
-template <class T>
-class expected
+// PREPARATION FOR OUTPUT MANIPULATORS *****************************************
+struct empty_output_type
 {
-  private:
-    const T& _value;
-    const T& _expectation;
-    color    _color;
+};
 
+// forward declaration
+template <class T>
+class manipulated_output_type;
+
+// important specialisation
+template <>
+class manipulated_output_type<empty_output_type>
+{
   public:
-    expected(const T& value, const T& expectation, color wcolor = color::red)
-        : _value(value), _expectation(expectation), _color(wcolor)
+    manipulated_output_type(width_type width)
+        : _width(width), _color(color::reset)
+    {
+    }
+    manipulated_output_type(color col) : _width(0), _color(col) {}
+
+    manipulated_output_type(manipulated_output_type m0,
+                            manipulated_output_type m1)
+        : _width((m0._width.get_width() > 0) ? m0._width : m1._width),
+          _color((m0._color != color::reset) ? m0._color : m1._color)
+    {
+        // it would be cool, to do some sanity checks here, i.e., not both
+        // widths are set, and not both colors are set
+    }
+
+  private:
+    width_type _width;
+    color      _color;
+
+    template <class U>
+    friend std::ostream&
+    operator<<(std::ostream& o, manipulated_output_type<U> w);
+
+    template <class U>
+    friend class manipulated_output_type;
+};
+
+
+// main implementation
+template <class T>
+class manipulated_output_type
+{
+  public:
+    manipulated_output_type(T                                          content,
+                            manipulated_output_type<empty_output_type> m)
+        : _width(m._width), _color(m._color), _content(content)
     {
     }
 
+    manipulated_output_type(manipulated_output_type                    m,
+                            manipulated_output_type<empty_output_type> o)
+        : _width((m._width.get_width() != 0) ? m._width : o._width),
+          _color((m._color != color::reset) ? m._color : o._color),
+          _content(m._content)
+    {
+        // it would be cool, to do some sanity checks here, i.e., not both
+        // widths are set, and not both colors are set
+    }
+
+    // template <class U>
+    // manipulated_output_type(manipulated_output_type    m,
+    //                         manipulated_output_type<U> o)
+    // {
+    //     // it would be cool to have some better error outputs i.e., this
+    //     // function does not exist, because it indicates, that two
+    //     // manipulated_output_types with content are combined
+    // }
+
+  private:
+    width_type _width;
+    color      _color;
+    T          _content;
+
     template <class U>
-    friend std::ostream& operator<<(std::ostream& o, expected<U> e);
+    friend std::ostream&
+    operator<<(std::ostream& o, manipulated_output_type<U> w);
+    template <class U>
+    friend class manipulated_output_type;
 };
 
+
+// output operators for manipulated output types
 template <class T>
-inline std::ostream& operator<<(std::ostream& o, expected<T> e)
+inline std::ostream& operator<<(std::ostream& o, manipulated_output_type<T> m)
 {
-    if (e._value == e._expectation)
-        o << e._value;
-    else
-        o << e._color << e._value << color::reset;
+    if (m._color != color::reset) o << m._color;
+    if (m._width.get_width() > 0) o << m._width;
+    o << m._content;
+    if (m._color != color::reset) o << color::reset;
+    if (m._width.get_width() > 0) o << " ";
+    return o;
+}
+
+template <>
+inline std::ostream&
+operator<<(std::ostream& o, manipulated_output_type<empty_output_type> m)
+{
+    if (m._color != color::reset) o << m._color;
+    if (m._width.get_width() > 0) o << m._width;
     return o;
 }
 
 
+// adding together two content free manipulated_output_types
+inline manipulated_output_type<empty_output_type>
+operator+(manipulated_output_type<empty_output_type> m0,
+          manipulated_output_type<empty_output_type> m1)
+{
+    return manipulated_output_type<empty_output_type>(m0, m1);
+}
 
+// adding content to a previously content free manipulated_output_type
+template <
+    class T,
+    std::enable_if_t<
+        !std::is_convertible_v<T, manipulated_output_type<empty_output_type>>,
+        int> = 0>
+inline manipulated_output_type<T>
+operator+(T t, manipulated_output_type<empty_output_type> m)
+{
+    return manipulated_output_type<T>(t, m);
+}
+
+template <
+    class T,
+    std::enable_if_t<
+        !std::is_convertible_v<T, manipulated_output_type<empty_output_type>>,
+        int> = 0>
+inline manipulated_output_type<T>
+operator+(manipulated_output_type<empty_output_type> m, T t)
+{
+    return manipulated_output_type<T>(t, m);
+}
+
+// adding content to a color somehow this did not work before
+template <
+    class T,
+    std::enable_if_t<
+        !std::is_convertible_v<T, manipulated_output_type<empty_output_type>>,
+        int> = 0>
+inline manipulated_output_type<T> operator+(T t, color c)
+{
+    return manipulated_output_type<T>(t, c);
+}
+
+template <
+    class T,
+    std::enable_if_t<
+        !std::is_convertible_v<T, manipulated_output_type<empty_output_type>>,
+        int> = 0>
+inline manipulated_output_type<T> operator+(color c, T t)
+{
+    return manipulated_output_type<T>(t, c);
+}
+
+// adding two manipulated_content_types, one with one without context
+template <class T>
+inline manipulated_output_type<T>
+operator+(manipulated_output_type<T>                 mt,
+          manipulated_output_type<empty_output_type> me)
+{
+    return manipulated_output_type<T>(mt, me);
+}
+
+template <class T>
+inline manipulated_output_type<T>
+operator+(manipulated_output_type<empty_output_type> me,
+          manipulated_output_type<T>                 mt)
+{
+    return manipulated_output_type<T>(mt, me);
+}
+
+
+// Some Helper Functions *******************************************************
+template <class T>
+inline manipulated_output_type<T> width(size_t w, T t)
+{
+    return width_type(w) + t;
+}
+
+template <class T>
+manipulated_output_type<T>
+expected(T value, T expectation, color wcolor = color::red)
+{
+    return value + manipulated_output_type<empty_output_type>(
+                       (value == expectation) ? color::reset : wcolor);
+}
 
 // PRINT BITS STUFF ************************************************************
 template <class int_type>

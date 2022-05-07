@@ -13,20 +13,18 @@ namespace otm = utm::out_tm;
 namespace ttm = utm::thread_tm;
 namespace rtm = utm::reclamation_tm;
 using c       = otm::color;
-using w       = otm::width;
 
 
 void print_help()
 {
     otm::out() << "This is a test for our hazard pointer implementation\n"
-               << c::magenta << "* Executable\n"
-               << c::reset << "   bench/hazard_test.cpp.\n"
-               << c::magenta << "* Test subject\n"
-               << "   " << c::green << "proj::hazard_tm::hazard_manager"
-               << c::reset << " from " << c::yellow << "impl/hazard.h"
-               << c::reset << "\n"
-               << c::magenta << "* Process\n"
-               << c::reset
+               << c::magenta + "* Executable\n"
+               << "   bench/hazard_test.cpp.\n"
+               << c::magenta + "* Test subject\n"
+               << "   " << c::green + "proj::hazard_tm::hazard_manager"
+               << " from " << c::yellow + "impl/hazard.h"
+               << "\n"
+               << c::magenta + "* Process\n"
                << "   Main: the main thread repeats the following it times\n"
                << "     1. wait until the others did incremented a counter\n"
                << "        (simulating some work), also wait for i-2 to be\n"
@@ -35,12 +33,12 @@ void print_help()
                << "     3. replace the current pointer with the new one\n"
                << "   Sub:  repeatedly acquire the current foo pointer and\n"
                << "         and increment its counter (in blocks of 100)\n"
-               << c::magenta << "* Parameters\n"
-               << c::reset << "   -p #(threads)\n"
+               << c::magenta + "* Parameters\n"
+               << "   -p #(threads)\n"
                << "   -n #(number of increments before a pointer change) \n"
                << "   -it #(repeats of the test)\n"
-               << c::magenta << "* Outputs\n"
-               << c::reset << "   i          counts the repeats\n"
+               << c::magenta + "* Outputs\n"
+               << "   i          counts the repeats\n"
                << "   current    the pointer before the exchange\n"
                << "   next       the pointer after the exchange\n"
                << "   deletor    {thread id, pointer nmbr, pointer}\n"
@@ -60,8 +58,8 @@ class foo
         deleted.store(id);
 
         otm::buffered_out()
-            << c::bred << "DEL    " << c::reset << w(3) << id << "    ptr  "
-            << this << " deleted by " << thread_id << std::endl;
+            << c::bred + "DEL    " << otm::width(3) + id << "    ptr  " << this
+            << " deleted by " << thread_id << std::endl;
     }
 
     static std::atomic_int deleted;
@@ -84,19 +82,23 @@ alignas(64) static std::atomic_bool finished{false};
 
 
 
-template <class ReclManager, class ThreadType> struct test;
+template <class ReclManager, class ThreadType>
+struct test;
 
-template <class ReclManager> struct test<ReclManager, ttm::timed_main_thread>
+template <class ReclManager>
+struct test<ReclManager, ttm::timed_main_thread>
 {
-    static int execute(ttm::timed_main_thread thrd, size_t it, size_t n,
-                       ReclManager& recl_mngr)
+    static int execute(ttm::timed_main_thread thrd,
+                       size_t                 it,
+                       size_t                 n,
+                       ReclManager&           recl_mngr)
     {
         utm::pin_to_core(thrd.id);
         thread_id   = thrd.id;
         auto handle = recl_mngr.get_handle();
 
         the_one.store(handle.create_pointer(0));
-        otm::buffered_out() << c::bgreen << "NEW" << c::reset
+        otm::buffered_out() << c::bgreen + "NEW"
                             << "      0    start               new "
                             << the_one.load() << std::endl;
 
@@ -112,8 +114,8 @@ template <class ReclManager> struct test<ReclManager, ttm::timed_main_thread>
                 auto next = handle.guard(handle.create_pointer(i));
 
                 otm::buffered_out()
-                    << c::bgreen << "NEW    " << c::reset << w(3) << i
-                    << "    prev " << static_cast<foo*>(current) << " new "
+                    << c::bgreen + "NEW    " << otm::width(3) + i << "    prev "
+                    << static_cast<foo*>(current) << " new "
                     << static_cast<foo*>(next) << std::endl;
 
                 foo* cas_temp = current;
@@ -139,10 +141,13 @@ template <class ReclManager> struct test<ReclManager, ttm::timed_main_thread>
     }
 };
 
-template <class ReclManager> struct test<ReclManager, ttm::untimed_sub_thread>
+template <class ReclManager>
+struct test<ReclManager, ttm::untimed_sub_thread>
 {
-    static int execute(ttm::untimed_sub_thread thrd, size_t, size_t,
-                       ReclManager&            recl_mngr)
+    static int execute(ttm::untimed_sub_thread thrd,
+                       size_t,
+                       size_t,
+                       ReclManager& recl_mngr)
     {
         utm::pin_to_core(thrd.id);
         thread_id   = thrd.id;
@@ -192,22 +197,19 @@ int main(int argn, char** argc)
     }
     if (!c.report()) return 1;
 
-    otm::out() << otm::color::bblue << "DELAYED RECLAMATION TEST"
-               << otm::color::reset << std::endl;
+    otm::out() << otm::color::bblue + "DELAYED RECLAMATION TEST" << std::endl;
     rtm::delayed_manager<foo> delayed_mngr;
     ttm::start_threads<delayed_test>(p, it, n, delayed_mngr);
     reset_test();
 
     otm::out() << std::endl
-               << otm::color::bblue << "COUNTING RECLAMATION TEST"
-               << otm::color::reset << std::endl;
+               << otm::color::bblue + "COUNTING RECLAMATION TEST" << std::endl;
     rtm::counting_manager<foo> counting_mngr;
     ttm::start_threads<counting_test>(p, it, n, counting_mngr);
     reset_test();
 
     otm::out() << std::endl
-               << otm::color::bblue << "HAZARD RECLAMATION TEST"
-               << otm::color::reset << std::endl;
+               << otm::color::bblue + "HAZARD RECLAMATION TEST" << std::endl;
     rtm::hazard_manager<foo> hazard_mngr;
     ttm::start_threads<hazard_test>(p, it, n, hazard_mngr);
     reset_test();

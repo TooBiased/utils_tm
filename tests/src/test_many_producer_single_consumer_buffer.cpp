@@ -12,9 +12,11 @@ namespace ttm = utils_tm::thread_tm;
 
 alignas(64) static utm::many_producer_single_consumer_buffer<size_t> buffer{0};
 
-template <class ThreadType> struct test;
+template <class ThreadType>
+struct test;
 
-template <> struct test<ttm::untimed_sub_thread>
+template <>
+struct test<ttm::untimed_sub_thread>
 {
     static int execute(ttm::untimed_sub_thread thrd, size_t n, size_t)
     {
@@ -37,7 +39,8 @@ template <> struct test<ttm::untimed_sub_thread>
     }
 };
 
-template <> struct test<ttm::timed_main_thread>
+template <>
+struct test<ttm::timed_main_thread>
 {
     static int execute(ttm::timed_main_thread thrd, size_t n, size_t bsize)
     {
@@ -75,8 +78,8 @@ template <> struct test<ttm::timed_main_thread>
             }
         }
         if (noerror)
-            otm::out() << otm::color::green << "test fully successful"
-                       << otm::color::reset << std::endl;
+            otm::out() << otm::color::green + "test fully successful"
+                       << std::endl;
 
         return 0;
     }
@@ -90,34 +93,29 @@ int main(int argn, char** argc)
     size_t                   bsize = c.int_arg("-s", 1000);
     size_t                   p     = c.int_arg("-p", 3);
 
-    otm::out() << otm::color::byellow << "START CORRECTNESS TEST"
-               << otm::color::reset << std::endl;
+    otm::out() << otm::color::byellow + "START CORRECTNESS TEST" << std::endl;
     otm::out() << "testing: many_producer_single_consumer_buffer" << std::endl;
 
 
-    otm::out() << "All but one thread push increasing elements into the buffer."
-               << std::endl
-               << "The first thread pops elements from the buffer and checks."
-               << std::endl
-               << "Additionally, the popped elements are tested, wheather they"
-               << std::endl
-               << "appear too often (or too littles)" << std::endl
-               << otm::color::bblue << "  1a. create data structure"
-               << std::endl
-               << "  1b. wait for synchronized operation" << std::endl
-               << "  2a. pop elements and count appearances from each number"
-               << std::endl
-               << "  2b. push back elements repeatedly, until 0..n are inserted"
-               << std::endl
-               << "      by each thread" << std::endl
-               << otm::color::reset << std::endl;
+    otm::out()
+        << "All but one thread push increasing elements into the buffer."
+        << std::endl
+        << "The first thread pops elements from the buffer and checks."
+        << std::endl
+        << "Additionally, the popped elements are tested, wheather they"
+        << std::endl
+        << "appear too often (or too littles)" << std::endl
+        << otm::color::bblue << "  1a. create data structure\n"
+        << "  1b. wait for synchronized operation\n"
+        << "  2a. pop elements and count appearances from each number\n"
+        << "  2b. push back elements repeatedly, until 0..n are inserted\n"
+        << "      by each thread" << std::endl
+        << otm::color::reset << std::endl;
 
 
-    otm::out() << otm::color::bgreen << "START TEST with <size_t>"
-               << otm::color::reset << std::endl;
+    otm::out() << otm::color::bgreen + "START TEST with <size_t>" << std::endl;
     ttm::start_threads<test>(p, n, bsize);
-    otm::out() << otm::color::bgreen << "END CORRECTNESS TEST"
-               << otm::color::reset << std::endl;
+    otm::out() << otm::color::bgreen + "END CORRECTNESS TEST" << std::endl;
 
     return 0;
 }

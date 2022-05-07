@@ -25,7 +25,7 @@ class circular_buffer
     using value_type = T;
 
     circular_buffer(size_t capacity = 128);
-    circular_buffer(const circular_buffer&) = delete;
+    circular_buffer(const circular_buffer&)            = delete;
     circular_buffer& operator=(const circular_buffer&) = delete;
     circular_buffer(circular_buffer&& other);
     circular_buffer& operator=(circular_buffer&& rhs);
@@ -66,7 +66,7 @@ class circular_buffer
             : _circular(buffer), _off(offset)
         {
         }
-        iterator_base(const iterator_base& other) = default;
+        iterator_base(const iterator_base& other)            = default;
         iterator_base& operator=(const iterator_base& other) = default;
         ~iterator_base()                                     = default;
 
@@ -252,7 +252,7 @@ void circular_buffer<T>::grow()
         nbuffer[i++] = std::move(*it);
         it->~T();
     }
-    std::fill(nbuffer + i, nbuffer + nbitmask + 1, T());
+    // std::fill(nbuffer + i, nbuffer + nbitmask + 1, T());
 
     free(_buffer);
     _start   = 0;

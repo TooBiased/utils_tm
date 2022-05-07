@@ -15,7 +15,8 @@ using buffer_type = utm::concurrent_circular_buffer<size_t>;
 alignas(64) static buffer_type buffer;
 alignas(64) static std::atomic_size_t counter;
 
-template <class ThreadType> struct test
+template <class ThreadType>
+struct test
 {
     static int execute(ThreadType thrd, size_t it, size_t n, size_t w)
     {
@@ -61,10 +62,7 @@ template <class ThreadType> struct test
                         thrd.out << "Error: " << val
                                  << " was found for a second time" << std::endl;
                     }
-                    else
-                    {
-                        checker[val] = true;
-                    }
+                    else { checker[val] = true; }
                 }
                 for (size_t i = 1; i <= w; ++i)
                 { // 0 should not be found thus we start at one
@@ -88,8 +86,7 @@ int main(int argn, char** argc)
     size_t                   w  = c.int_arg("-w", 100);
     size_t                   p  = c.int_arg("-p", 4);
 
-    otm::out() << otm::color::byellow << "START CORRECTNESS TEST"
-               << otm::color::reset << std::endl;
+    otm::out() << otm::color::byellow + "START CORRECTNESS TEST" << std::endl;
     otm::out() << "testing: concurrent_circular_buffer" << std::endl;
 
 
@@ -100,8 +97,8 @@ int main(int argn, char** argc)
         << "Additionally, the popped elements are tested, wheather they"
         << std::endl
         << "appear too often (or too littles)" << std::endl
-        << otm::color::bblue << "  1a. create and prepare data structure"
-        << std::endl
+        << otm::color::bblue //
+        << "  1a. create and prepare data structure" << std::endl
         << "  1b. wait for synchronized operation" << std::endl
         << "  2.  repeat: pop one element and push it back into the queue"
         << std::endl
@@ -109,14 +106,12 @@ int main(int argn, char** argc)
         << otm::color::reset << std::endl;
 
 
-    otm::out() << otm::color::bgreen << "START TEST with <size_t>"
-               << otm::color::reset << std::endl;
+    otm::out() << otm::color::bgreen + "START TEST with <size_t>" << std::endl;
 
     buffer = buffer_type{w};
 
     ttm::start_threads<test>(p, it, n, w);
-    otm::out() << otm::color::bgreen << "END CORRECTNESS TEST"
-               << otm::color::reset << std::endl;
+    otm::out() << otm::color::bgreen + "END CORRECTNESS TEST" << std::endl;
 
     return 0;
 }

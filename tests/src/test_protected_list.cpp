@@ -28,7 +28,8 @@ std::string size_test(size_t exp, size_t real)
     return str;
 }
 
-template <class ThreadType> struct test
+template <class ThreadType>
+struct test
 {
     static int execute(ThreadType thrd, size_t n, size_t it)
     {
@@ -93,13 +94,12 @@ template <class ThreadType> struct test
 
             if (!errors.load())
             {
-                thrd.out << otm::color::green << "Test fully successful!"
-                         << otm::color::reset << std::endl;
+                thrd.out << otm::color::green + "Test fully successful!"
+                         << std::endl;
             }
             else
             {
-                thrd.out << otm::color::red << "Test unsuccessful!"
-                         << otm::color::reset << std::endl;
+                thrd.out << otm::color::red + "Test unsuccessful!" << std::endl;
             }
         }
 
@@ -115,8 +115,7 @@ int main(int argn, char** argc)
     size_t                   p  = c.int_arg("-p", 4);
     size_t                   it = c.int_arg("-it", 8);
 
-    otm::out() << otm::color::byellow << "START CORRECTNESS TEST"
-               << otm::color::reset << std::endl;
+    otm::out() << otm::color::byellow + "START CORRECTNESS TEST" << std::endl;
     otm::out() << "testing: concurrent_singly_linked_list" << std::endl;
 
 
@@ -125,17 +124,15 @@ int main(int argn, char** argc)
                << "Then iterate through all inserted elements. Test weather"
                << std::endl
                << "each thread inserted all its elements." << std::endl
-               << otm::color::bblue << "  1. each thread pushes n elements"
-               << std::endl
+               << otm::color::bblue //
+               << "  1. each thread pushes n elements" << std::endl
                << "  2. each thread iterates over elements and finds its own"
                << std::endl;
 
 
-    otm::out() << otm::color::bgreen << "START TEST" << otm::color::reset
-               << std::endl;
+    otm::out() << otm::color::bgreen + "START TEST" << std::endl;
     ttm::start_threads<test>(p, n, it);
-    otm::out() << otm::color::bgreen << "END CORRECTNESS TEST"
-               << otm::color::reset << std::endl;
+    otm::out() << otm::color::bgreen + "END CORRECTNESS TEST" << std::endl;
 
     return 0;
 }

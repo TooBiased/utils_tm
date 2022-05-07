@@ -15,10 +15,10 @@ class move_checker
     size_t nmbr;
 
     move_checker(size_t i = 0) : nmbr(i) {}
-    move_checker(const move_checker&) = delete;
+    move_checker(const move_checker&)            = delete;
     move_checker& operator=(const move_checker&) = delete;
     move_checker(move_checker&&)                 = default;
-    move_checker& operator=(move_checker&&) = default;
+    move_checker& operator=(move_checker&&)      = default;
 
     bool operator==(const move_checker& other) { return other.nmbr == nmbr; }
     bool operator!=(const move_checker& other) { return !operator==(other); }
@@ -32,7 +32,8 @@ void generate_random(size_t n, std::vector<size_t>& container)
     for (size_t i = 0; i < n; ++i) { container.push_back(dis(re)); }
 }
 
-template <class T> void run_test(size_t n, size_t c, size_t w)
+template <class T>
+void run_test(size_t n, size_t c, size_t w)
 {
     std::vector<size_t> input;
     input.reserve(n);
@@ -51,16 +52,16 @@ template <class T> void run_test(size_t n, size_t c, size_t w)
         if (!popped)
         {
             noerror = false;
-            otm::out() << otm::color::red
-                       << "in move right: unsuccessful pop at pos " << i
-                       << otm::color::reset << std::endl;
+            otm::out() << otm::color::red +
+                              "in move right: unsuccessful pop at pos "
+                       << i << std::endl;
         }
         else if (popped.value() != T(input[trailing_index++]))
         {
             noerror = false;
-            otm::out() << otm::color::red
-                       << "in move right: popped the wrong nmbr at pos " << i
-                       << otm::color::reset << std::endl;
+            otm::out() << otm::color::red +
+                              "in move right: popped the wrong nmbr at pos "
+                       << i << std::endl;
         }
     }
     trailing_index = n - 1;
@@ -71,16 +72,16 @@ template <class T> void run_test(size_t n, size_t c, size_t w)
         if (!popped)
         {
             noerror = false;
-            otm::out() << otm::color::red
-                       << "in move left: unsuccessful pop at pos " << i
-                       << otm::color::reset << std::endl;
+            otm::out() << otm::color::red +
+                              "in move left: unsuccessful pop at pos "
+                       << i << std::endl;
         }
         else if (popped.value() != T(input[trailing_index--]))
         {
             noerror = false;
-            otm::out() << otm::color::red
-                       << "in move left: popped the wrong nmbr at pos " << i
-                       << otm::color::reset << std::endl;
+            otm::out() << otm::color::red +
+                              "in move left: popped the wrong nmbr at pos "
+                       << i << std::endl;
         }
     }
 
@@ -88,8 +89,7 @@ template <class T> void run_test(size_t n, size_t c, size_t w)
     otm::out() << "capacity after test: " << container.capacity() << std::endl;
 
     if (noerror)
-        otm::out() << otm::color::green << "test fully successful!"
-                   << otm::color::reset << std::endl;
+        otm::out() << otm::color::green + "test fully successful!" << std::endl;
 }
 
 
@@ -102,23 +102,21 @@ int main(int argn, char** argc)
 
     if (!cline.report()) return 1;
 
-    otm::out() << otm::color::byellow << "START CORRECTNESS TEST"
-               << otm::color::reset << std::endl;
+    otm::out() << otm::color::byellow + "START CORRECTNESS TEST" << std::endl;
     otm::out() << "testing: circular_buffer" << std::endl;
 
 
     otm::out() << "Elements are pushed and popped from the buffer." << std::endl
                << "First we test size_t elements then std::string elements:"
                << std::endl
-               << otm::color::bblue << "  1. randomly generate keys"
-               << std::endl
+               << otm::color::bblue //
+               << "  1. randomly generate keys" << std::endl
                << "  2. push_front and pop_back" << std::endl
                << "  3. push_back and pop_front" << std::endl
                << otm::color::reset << std::endl;
 
 
-    otm::out() << otm::color::bgreen << "START TEST with <size_t>"
-               << otm::color::reset << std::endl;
+    otm::out() << otm::color::bgreen + "START TEST with <size_t>" << std::endl;
 
     run_test<size_t>(n, c, w);
 
@@ -127,13 +125,12 @@ int main(int argn, char** argc)
 
     // run_test<std::string>(n, c);
 
-    otm::out() << otm::color::bgreen << "START TEST with <move_checker>"
-               << otm::color::reset << std::endl;
+    otm::out() << otm::color::bgreen + "START TEST with <move_checker>"
+               << std::endl;
 
     run_test<move_checker>(n, c, w);
 
-    otm::out() << otm::color::bgreen << "END CORRECTNESS TEST"
-               << otm::color::reset << std::endl;
+    otm::out() << otm::color::bgreen + "END CORRECTNESS TEST" << std::endl;
 
     return 0;
 }
