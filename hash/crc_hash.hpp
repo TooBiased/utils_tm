@@ -31,8 +31,15 @@ struct crc_hash
                         (__builtin_ia32_crc32di(k, seed1) << 32));
     }
 
+    inline uint64_t operator()(const uint32_t& k) const
+    {
+        return uint64_t(__builtin_ia32_crc32di(k, seed0) |
+                        (__builtin_ia32_crc32di(k, seed1) << 32))
+    }
+
     // string keys are not implemented for our crc-based hash function
-    template <class Type> inline uint64_t operator()(const Type& k) const;
+    template <class Type>
+    inline uint64_t operator()(const Type& k) const;
 };
 
 } // namespace hash_tm

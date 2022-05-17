@@ -29,8 +29,15 @@ struct xx_hash
         return XXH64(&local, 8, seed);
     }
 
+    inline uint64_t operator()(const uint32_t k) const
+    {
+        auto local = k;
+        return XXH64(&local, 4, seed);
+    }
+
     // targeted at string type classes i.e. data pointer + size
-    template <class Type> inline uint64_t operator()(const Type& k) const
+    template <class Type>
+    inline uint64_t operator()(const Type& k) const
     {
         return XXH64(k.data(), k.size(), seed);
     }

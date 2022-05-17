@@ -84,8 +84,16 @@ struct murmur2_hash
         return MurmurHash64A(&local, 8, seed);
     }
 
+    inline uint64_t operator()(const uint32_t k) const
+    {
+        auto local = k;
+        return MurmurHash64A(&local, 4, seed);
+    }
+
+
     // targeted at string type classes i.e. data pointer + size
-    template <class Type> inline uint64_t operator()(const Type& k) const
+    template <class Type>
+    inline uint64_t operator()(const Type& k) const
     {
         return MurmurHash64A(k.data(), k.size(), seed);
     }
