@@ -52,22 +52,18 @@ inline out_tm::output_type& dout()
 
 // DEBUG OUTPUTS *** only print if debug_mode is on ************************
 // outputs a message (in yellow) if in debug mode and condition is true
-inline void
-if_debug(const std::string& str, [[maybe_unused]] bool condition = true)
+inline void if_debug(std::string&& str, [[maybe_unused]] bool condition = true)
 {
     if constexpr (debug_mode)
     {
-        if (condition)
-        {
-            dout() << out_tm::color::yellow << str << out_tm::color::reset
-                   << std::endl;
-        }
+        str.append("\n");
+        if (condition) { dout() << out_tm::color::yellow + str << std::flush; }
     }
 }
 
 // outputs an error message (in red) and exits if in debug mode and condition is
 // true
-inline void if_debug_critical(const std::string&      str,
+inline void if_debug_critical(std::string&&           str,
                               [[maybe_unused]] bool   condition  = true,
                               [[maybe_unused]] size_t error_code = 42)
 {
@@ -75,8 +71,8 @@ inline void if_debug_critical(const std::string&      str,
     {
         if (condition)
         {
-            dout() << out_tm::color::red << str << out_tm::color::reset
-                   << std::endl;
+            str.append("\n");
+            dout() << out_tm::color::red + str << std::flush;
 #ifdef NO_EXCEPT
             exit(error_code);
 #else
@@ -87,12 +83,12 @@ inline void if_debug_critical(const std::string&      str,
 }
 
 // outputs the message (in blue) if in verbose mode
-inline void if_verbose(const std::string& str)
+inline void if_verbose(std::string&& str)
 {
     if constexpr (verbose_mode)
     {
-        dout() << out_tm::color::blue << str << out_tm::color::reset
-               << std::endl;
+        str.append("\n");
+        dout() << out_tm::color::blue + str << std::flush;
     }
 }
 
@@ -127,8 +123,9 @@ class real_checker
     std::string  _message;
 
   public:
-    real_checker(const ctype& counter, const std::string& msg,
-                 size_t exp_diff = 0)
+    real_checker(const ctype&       counter,
+                 const std::string& msg,
+                 size_t             exp_diff = 0)
         : _counter(counter), _start(counter), _exp_diff(exp_diff), _message(msg)
     {
     }
