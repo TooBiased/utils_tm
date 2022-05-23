@@ -364,11 +364,13 @@ class manipulated_output_type
 template <class T>
 inline std::ostream& operator<<(std::ostream& o, manipulated_output_type<T> m)
 {
-    if (m._color != color::reset) o << m._color;
-    if (m._width.get_width() > 0) o << m._width;
-    o << m._content;
-    if (m._color != color::reset) o << color::reset;
-    if (m._width.get_width() > 0) o << " ";
+    std::stringstream buffer;
+    if (m._color != color::reset) buffer << m._color;
+    if (m._width.get_width() > 0) buffer << m._width;
+    buffer << m._content;
+    if (m._color != color::reset) buffer << color::reset;
+    if (m._width.get_width() > 0) buffer << " ";
+    o << buffer.str();
     return o;
 }
 
