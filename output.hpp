@@ -175,34 +175,82 @@ inline locally_buffered_output<output_type>& buffered_out()
 
 
 // CHANGING COLORS OF OUTPUTS **************************************************
+
+// OLD METHOD OF DOING THINGS
+// enum class color
+// {
+//     reset    = 0,
+//     black    = 30,
+//     red      = 31,
+//     green    = 32,
+//     yellow   = 33,
+//     blue     = 34,
+//     magenta  = 35,
+//     cyan     = 36,
+//     white    = 37,
+//     bblack   = 40,
+//     bred     = 41,
+//     bgreen   = 42,
+//     byellow  = 43,
+//     bblue    = 44,
+//     bmagenta = 45,
+//     bcyan    = 46,
+//     bwhite   = 47
+// };
+
+// inline std::ostream& operator<<(std::ostream& o, color c)
+// {
+//     int ccode = static_cast<int>(c);
+//     if (ccode >= 40) o
+//         << "\033[1;" << ccode - 10 << "m";
+//     else o << "\033[0;" << ccode << "m";
+//     return o;
+// }
+
+
 enum class color
 {
     reset    = 0,
-    black    = 30,
-    red      = 31,
-    green    = 32,
-    yellow   = 33,
-    blue     = 34,
-    magenta  = 35,
-    cyan     = 36,
-    white    = 37,
-    bblack   = 40,
-    bred     = 41,
-    bgreen   = 42,
-    byellow  = 43,
-    bblue    = 44,
-    bmagenta = 45,
-    bcyan    = 46,
-    bwhite   = 47
+    black    = 1,
+    red      = 2,
+    green    = 3,
+    yellow   = 4,
+    blue     = 5,
+    magenta  = 6,
+    cyan     = 7,
+    white    = 8,
+    bblack   = 9,
+    bred     = 10,
+    bgreen   = 11,
+    byellow  = 12,
+    bblue    = 13,
+    bmagenta = 14,
+    bcyan    = 15,
+    bwhite   = 16
 };
 
 inline std::ostream& operator<<(std::ostream& o, color c)
 {
-    int ccode = static_cast<int>(c);
-    if (ccode >= 40)
-        o << "\033[1;" << ccode - 10 << "m";
-    else
-        o << "\033[0;" << ccode << "m";
+    static constexpr std::string_view color_code_table[17] = {
+        "\033[0;0m",  // reset
+        "\033[0;30m", //  black
+        "\033[0;31m", //  red
+        "\033[0;32m", //  green
+        "\033[0;33m", //  yellow
+        "\033[0;34m", //  blue
+        "\033[0;35m", //  magenta
+        "\033[0;36m", //  cyan
+        "\033[0;37m", //  white
+        "\033[1;30m", //  bblack
+        "\033[1;31m", //  bred
+        "\033[1;32m", //  bgreen
+        "\033[1;33m", //  byellow
+        "\033[1;34m", //  bblue
+        "\033[1;35m", //  bmagenta
+        "\033[1;36m", //  bcyan
+        "\033[1;37m"  //  bwhite
+    };
+    o << color_code_table[static_cast<int>(c)];
     return o;
 }
 
