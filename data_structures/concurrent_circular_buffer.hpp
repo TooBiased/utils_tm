@@ -114,7 +114,7 @@ T concurrent_circular_buffer<T>::pop()
     auto temp = _buffer[id].exchange(T(), memo::acq_rel);
     while (temp == T())
     {
-        while (_buffer[id].load() == T())
+        while (_buffer[id].load(memo::relaxed) == T())
         {
             /* wait until something was inserted */
         }
