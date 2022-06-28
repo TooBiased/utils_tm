@@ -31,7 +31,8 @@ class hazard_manager
   private:
     using this_type =
         hazard_manager<T, Destructor, Allocator, maxThreads, maxProtections>;
-    using memo = concurrency_tm::standard_memory_order_policy;
+    using memo            = concurrency_tm::standard_memory_order_policy;
+    using destructor_type = Destructor;
     using allocator_type =
         typename std::allocator_traits<Allocator>::rebind_alloc<T>;
     using alloc_traits = std::allocator_traits<Allocator>;
@@ -51,8 +52,10 @@ class hazard_manager
         using other = hazard_manager<lT, lD, lA, lmT, lmP>;
     };
 
-    hazard_manager(Destructor&& destructor = Destructor())
-        : _destructor(std::move(destructor)), _handle_counter(-1)
+    hazard_manager(destructor_type&&     destructor = destructor_type(),
+                   const allocator_type& alloc      = allocator_type())
+        : _destructor(std::move(destructor)), _allocator(alloc),
+          _handle_counter(-1)
     {
         for (auto& a : _handles) a.store(nullptr, memo::relaxed);
     }
@@ -99,8 +102,7 @@ class hazard_manager
                                            maxThreads,
                                            maxProtections>;
         using this_type   = handle_type;
-
-        using istate = typename internal_handle::istate;
+        using istate      = typename internal_handle::istate;
 
       public:
         using pointer_type        = typename parent_type::pointer_type;
@@ -152,8 +154,8 @@ class hazard_manager
     void        print() const;
 
   private:
-    Destructor     _destructor;
-    allocator_type _allocator;
+    [[no_unique_address]] Destructor     _destructor;
+    [[no_unique_address]] allocator_type _allocator;
 
     std::atomic_int               _handle_counter;
     std::atomic<internal_handle*> _handles[maxThreads];

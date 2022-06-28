@@ -78,8 +78,9 @@ class counting_manager
 
 
 
-    counting_manager(Destructor&& destructor = Destructor())
-        : _destructor(std::move(destructor))
+    counting_manager(destructor_type&&     destructor = destructor_type(),
+                     const allocator_type& alloc      = allocator_type())
+        : _destructor(std::move(destructor)), _allocator(alloc)
     {
     }
     counting_manager(const counting_manager&)            = delete;
@@ -139,10 +140,10 @@ class counting_manager
     void        delete_raw(pointer_type ptr);
 
   private:
-    destructor_type _destructor;
-    allocator_type  _allocator;
-    std::mutex      _freelist_mutex;
-    queue_type      _freelist;
+    [[no_unique_address]] destructor_type _destructor;
+    [[no_unique_address]] allocator_type  _allocator;
+    std::mutex                            _freelist_mutex;
+    queue_type                            _freelist;
 };
 
 
@@ -170,7 +171,11 @@ counting_manager<T, D, A, Q>::~counting_manager()
 {
     // no concurrency possible thus no mutex necessary
     // std::lock_guard<std::mutex> guard(_freelist_mutex);
-    for (auto ptr : _freelist) alloc_traits::deallocate(_allocator, ptr, 1);
+    for (auto ptr : _freelist)
+    {
+        alloc_traits::destroy(_allocator, ptr);
+        alloc_traits::deallocate(_allocator, ptr, 1);
+    }
 }
 
 template <class T, class D, class A, template <class> class Q>
@@ -197,7 +202,8 @@ counting_manager<T, D, A, Q>::_counted_object::_counted_object(Args&&... arg)
 template <class T, class D, class A, template <class> class Q>
 void counting_manager<T, D, A, Q>::_counted_object::erase()
 {
-    // this should actually use alloc_traits::destroy(_allocator, this)
+    // this should not use alloc_traits::destroy(_allocator, this)
+    // because only the base class object is deleted
     this->T::~T();
 }
 
@@ -205,7 +211,8 @@ template <class T, class D, class A, template <class> class Q>
 template <class... Args>
 void counting_manager<T, D, A, Q>::_counted_object::emplace(Args&&... arg)
 {
-    // this should actually use alloc_traits::construct(_allocator, this)
+    // this should not use alloc_traits::construct(_allocator, ...)
+    // because only the base class object is reconstructed
     new (this) T(std::forward<Args>(arg)...);
 }
 
