@@ -1,6 +1,7 @@
 #pragma once
 
 #include <atomic>
+#include <memory>
 #include <mutex>
 #include <tuple>
 #include <vector>
@@ -23,6 +24,7 @@ namespace ctm = concurrency_tm;
 
 template <class T,
           class Destructor             = default_destructor<T>,
+          class Allocator              = std::allocator<T>,
           template <class> class Queue = circular_buffer>
 class counting_manager
 {
@@ -52,10 +54,13 @@ class counting_manager
         static constexpr uint del_flag = 1 << 31;
     };
 
-    using this_type       = counting_manager<T, Destructor, Queue>;
+    using this_type       = counting_manager<T, Destructor, Allocator, Queue>;
     using destructor_type = Destructor;
     using internal_type   = _counted_object;
-    using queue_type      = Queue<internal_type*>;
+    using allocator_type =
+        typename std::allocator_traits<Allocator>::rebind_alloc<internal_type>;
+    using alloc_traits = std::allocator_traits<allocator_type>;
+    using queue_type   = Queue<internal_type*>;
 
   public:
     using pointer_type        = T*;
@@ -64,10 +69,11 @@ class counting_manager
 
     template <class lT                  = T,
               class lD                  = default_destructor<lT>,
+              class lA                  = Allocator,
               template <class> class lQ = Queue>
     struct rebind
     {
-        using other = counting_manager<lT, lD, lQ>;
+        using other = counting_manager<lT, lD, lA, lQ>;
     };
 
 
@@ -76,7 +82,7 @@ class counting_manager
         : _destructor(std::move(destructor))
     {
     }
-    counting_manager(const counting_manager&) = delete;
+    counting_manager(const counting_manager&)            = delete;
     counting_manager& operator=(const counting_manager&) = delete;
     counting_manager(counting_manager&& other);
     counting_manager& operator=(counting_manager&& other);
@@ -85,7 +91,7 @@ class counting_manager
     class handle_type
     {
       private:
-        using parent_type   = counting_manager<T, Destructor, Queue>;
+        using parent_type   = counting_manager<T, Destructor, Allocator, Queue>;
         using this_type     = handle_type;
         using internal_type = typename parent_type::internal_type;
 
@@ -95,9 +101,9 @@ class counting_manager
         using guard_type          = reclamation_guard<T, this_type>;
 
         handle_type(parent_type& parent) : n(0), _parent(parent) {}
-        handle_type(const handle_type&) = delete;
-        handle_type& operator=(const handle_type&) = delete;
-        handle_type(handle_type&& other) noexcept  = default;
+        handle_type(const handle_type&)                      = delete;
+        handle_type& operator=(const handle_type&)           = delete;
+        handle_type(handle_type&& other) noexcept            = default;
         handle_type& operator=(handle_type&& other) noexcept = default;
         ~handle_type()                                       = default;
 
@@ -134,22 +140,24 @@ class counting_manager
 
   private:
     destructor_type _destructor;
+    allocator_type  _allocator;
     std::mutex      _freelist_mutex;
     queue_type      _freelist;
 };
 
 
-template <class T, class D, template <class> class Q>
-counting_manager<T, D, Q>::counting_manager(counting_manager&& other)
-    : _destructor(std::move(other._destructor)), _freelist_mutex(), _freelist()
+template <class T, class D, class A, template <class> class Q>
+counting_manager<T, D, A, Q>::counting_manager(counting_manager&& other)
+    : _destructor(std::move(other._destructor)), _allocator(other._allocator),
+      _freelist_mutex(), _freelist()
 {
     std::lock_guard<std::mutex> guard(other._freelist_mutex);
     _freelist = std::move(other._freelist);
 }
 
-template <class T, class D, template <class> class Q>
-counting_manager<T, D, Q>&
-counting_manager<T, D, Q>::operator=(counting_manager&& other)
+template <class T, class D, class A, template <class> class Q>
+counting_manager<T, D, A, Q>&
+counting_manager<T, D, A, Q>::operator=(counting_manager&& other)
 {
     if (&other == this) return *this;
     this->~counting_manager();
@@ -157,16 +165,16 @@ counting_manager<T, D, Q>::operator=(counting_manager&& other)
     return *this;
 }
 
-template <class T, class D, template <class> class Q>
-counting_manager<T, D, Q>::~counting_manager()
+template <class T, class D, class A, template <class> class Q>
+counting_manager<T, D, A, Q>::~counting_manager()
 {
     // no concurrency possible thus no mutex necessary
     // std::lock_guard<std::mutex> guard(_freelist_mutex);
-    for (auto ptr : _freelist) free(ptr);
+    for (auto ptr : _freelist) alloc_traits::deallocate(_allocator, ptr, 1);
 }
 
-template <class T, class D, template <class> class Q>
-void counting_manager<T, D, Q>::delete_raw(pointer_type ptr)
+template <class T, class D, class A, template <class> class Q>
+void counting_manager<T, D, A, Q>::delete_raw(pointer_type ptr)
 {
     auto iptr = static_cast<internal_type*>(mark::clear(ptr));
 
@@ -179,34 +187,36 @@ void counting_manager<T, D, Q>::delete_raw(pointer_type ptr)
 
 
 // *** COUNTING_OBJECT *********************************************************
-template <class T, class D, template <class> class Q>
+template <class T, class D, class A, template <class> class Q>
 template <class... Args>
-counting_manager<T, D, Q>::_counted_object::_counted_object(Args&&... arg)
+counting_manager<T, D, A, Q>::_counted_object::_counted_object(Args&&... arg)
     : T(std::forward<Args>(arg)...), _counter(0)
 {
 }
 
-template <class T, class D, template <class> class Q>
-void counting_manager<T, D, Q>::_counted_object::erase()
+template <class T, class D, class A, template <class> class Q>
+void counting_manager<T, D, A, Q>::_counted_object::erase()
 {
+    // this should actually use alloc_traits::destroy(_allocator, this)
     this->T::~T();
 }
 
-template <class T, class D, template <class> class Q>
+template <class T, class D, class A, template <class> class Q>
 template <class... Args>
-void counting_manager<T, D, Q>::_counted_object::emplace(Args&&... arg)
+void counting_manager<T, D, A, Q>::_counted_object::emplace(Args&&... arg)
 {
+    // this should actually use alloc_traits::construct(_allocator, this)
     new (this) T(std::forward<Args>(arg)...);
 }
 
-template <class T, class D, template <class> class Q>
-void counting_manager<T, D, Q>::_counted_object::increment_counter()
+template <class T, class D, class A, template <class> class Q>
+void counting_manager<T, D, A, Q>::_counted_object::increment_counter()
 {
     _counter.fetch_add(1, memo::acquire);
 }
 
-template <class T, class D, template <class> class Q>
-bool counting_manager<T, D, Q>::_counted_object::decrement_counter()
+template <class T, class D, class A, template <class> class Q>
+bool counting_manager<T, D, A, Q>::_counted_object::decrement_counter()
 {
     auto temp = _counter.fetch_sub(1, memo::acq_rel);
     debug_tm::if_debug("Warning: in decrement_counter - "
@@ -219,8 +229,8 @@ bool counting_manager<T, D, Q>::_counted_object::decrement_counter()
     return (temp == del_flag + 1);
 }
 
-template <class T, class D, template <class> class Q>
-bool counting_manager<T, D, Q>::_counted_object::mark_deletion()
+template <class T, class D, class A, template <class> class Q>
+bool counting_manager<T, D, A, Q>::_counted_object::mark_deletion()
 {
     auto temp = _counter.fetch_or(del_flag, memo::acq_rel);
 
@@ -231,21 +241,21 @@ bool counting_manager<T, D, Q>::_counted_object::mark_deletion()
     return (temp == 0); // element was unused, and not marked before
 }
 
-template <class T, class D, template <class> class Q>
-bool counting_manager<T, D, Q>::_counted_object::is_safe()
+template <class T, class D, class A, template <class> class Q>
+bool counting_manager<T, D, A, Q>::_counted_object::is_safe()
 {
     return !_counter.load(memo::acquire);
 }
 
-template <class T, class D, template <class> class Q>
-bool counting_manager<T, D, Q>::_counted_object::reset()
+template <class T, class D, class A, template <class> class Q>
+bool counting_manager<T, D, A, Q>::_counted_object::reset()
 {
     auto temp = del_flag;
     return _counter.compare_exchange_strong(temp, 0, memo::acq_rel);
 }
 
-template <class T, class D, template <class> class Q>
-void counting_manager<T, D, Q>::_counted_object::print() const
+template <class T, class D, class A, template <class> class Q>
+void counting_manager<T, D, A, Q>::_counted_object::print() const
 {
     auto temp = _counter.load(memo::acquire);
     out_tm::out() << ((temp & del_flag) ? "d" : "") //
@@ -254,9 +264,10 @@ void counting_manager<T, D, Q>::_counted_object::print() const
 
 // *** HANDLE STUFF ************************************************************
 // ***** HANDLE MAIN FUNCTIONALITY *********************************************
-template <class T, class D, template <class> class Q>
+template <class T, class D, class A, template <class> class Q>
 template <class... Args>
-T* counting_manager<T, D, Q>::handle_type::create_pointer(Args&&... arg) const
+T* counting_manager<T, D, A, Q>::handle_type::create_pointer(
+    Args&&... args) const
 {
     internal_type* temp = nullptr;
 #ifndef NO_FREELIST
@@ -267,19 +278,22 @@ T* counting_manager<T, D, Q>::handle_type::create_pointer(Args&&... arg) const
     }
     if (temp)
     {
-        temp->emplace(std::forward<Args>(arg)...);
+        temp->emplace(std::forward<Args>(args)...);
         return temp;
     }
 #endif
     // temp = new internal_type(std::forward<Args>(arg)...);
-    temp = static_cast<internal_type*>(malloc(sizeof(internal_type)));
-    new (temp) internal_type(std::forward<Args>(arg)...);
+    // temp = static_cast<internal_type*>(malloc(sizeof(internal_type)));
+    // new (temp) internal_type(std::forward<Args>(arg)...);
+    temp = alloc_traits::allocate(_parent._allocator, 1);
+    alloc_traits::construct(_parent._allocator, temp,
+                            std::forward<Args>(args)...);
 
     return temp;
 }
 
-template <class T, class D, template <class> class Q>
-T* counting_manager<T, D, Q>::handle_type::protect(
+template <class T, class D, class A, template <class> class Q>
+T* counting_manager<T, D, A, Q>::handle_type::protect(
     const atomic_pointer_type& ptr)
 {
     ++n;
@@ -299,23 +313,23 @@ T* counting_manager<T, D, Q>::handle_type::protect(
     return temp;
 }
 
-template <class T, class D, template <class> class Q>
-void counting_manager<T, D, Q>::handle_type::protect_raw(pointer_type ptr)
+template <class T, class D, class A, template <class> class Q>
+void counting_manager<T, D, A, Q>::handle_type::protect_raw(pointer_type ptr)
 {
     ++n;
     get_iptr(ptr)->increment_counter();
 }
 
-template <class T, class D, template <class> class Q>
-void counting_manager<T, D, Q>::handle_type::unprotect(pointer_type ptr)
+template <class T, class D, class A, template <class> class Q>
+void counting_manager<T, D, A, Q>::handle_type::unprotect(pointer_type ptr)
 {
     --n;
     auto temp = get_iptr(ptr);
     if (temp->decrement_counter()) internal_delete(temp);
 }
 
-template <class T, class D, template <class> class Q>
-void counting_manager<T, D, Q>::handle_type::unprotect(
+template <class T, class D, class A, template <class> class Q>
+void counting_manager<T, D, A, Q>::handle_type::unprotect(
     std::vector<pointer_type>& vec)
 {
     n -= vec.size();
@@ -326,29 +340,30 @@ void counting_manager<T, D, Q>::handle_type::unprotect(
     }
 }
 
-template <class T, class D, template <class> class Q>
-typename counting_manager<T, D, Q>::handle_type::guard_type
-counting_manager<T, D, Q>::handle_type::guard(const atomic_pointer_type& aptr)
+template <class T, class D, class A, template <class> class Q>
+typename counting_manager<T, D, A, Q>::handle_type::guard_type
+counting_manager<T, D, A, Q>::handle_type::guard(
+    const atomic_pointer_type& aptr)
 {
     return make_rec_guard(*this, aptr);
 }
 
-template <class T, class D, template <class> class Q>
-typename counting_manager<T, D, Q>::handle_type::guard_type
-counting_manager<T, D, Q>::handle_type::guard(pointer_type ptr)
+template <class T, class D, class A, template <class> class Q>
+typename counting_manager<T, D, A, Q>::handle_type::guard_type
+counting_manager<T, D, A, Q>::handle_type::guard(pointer_type ptr)
 {
     return make_rec_guard(*this, ptr);
 }
 
-template <class T, class D, template <class> class Q>
-void counting_manager<T, D, Q>::handle_type::safe_delete(pointer_type ptr)
+template <class T, class D, class A, template <class> class Q>
+void counting_manager<T, D, A, Q>::handle_type::safe_delete(pointer_type ptr)
 {
     auto temp = get_iptr(ptr);
     if (temp->mark_deletion()) internal_delete(temp);
 }
 
-template <class T, class D, template <class> class Q>
-void counting_manager<T, D, Q>::handle_type::delete_raw(pointer_type ptr)
+template <class T, class D, class A, template <class> class Q>
+void counting_manager<T, D, A, Q>::handle_type::delete_raw(pointer_type ptr)
 {
     auto iptr = get_iptr(ptr);
 
@@ -358,8 +373,8 @@ void counting_manager<T, D, Q>::handle_type::delete_raw(pointer_type ptr)
     _parent._freelist.push_back(iptr);
 }
 
-template <class T, class D, template <class> class Q>
-bool counting_manager<T, D, Q>::handle_type::is_safe(pointer_type ptr)
+template <class T, class D, class A, template <class> class Q>
+bool counting_manager<T, D, A, Q>::handle_type::is_safe(pointer_type ptr)
 {
     return get_iptr(ptr)->is_safe();
 }
@@ -368,15 +383,15 @@ bool counting_manager<T, D, Q>::handle_type::is_safe(pointer_type ptr)
 
 
 // ***** HANDLE HELPER FUNCTIONS ***********************************************
-template <class T, class D, template <class> class Q>
-void counting_manager<T, D, Q>::handle_type::print(pointer_type ptr) const
+template <class T, class D, class A, template <class> class Q>
+void counting_manager<T, D, A, Q>::handle_type::print(pointer_type ptr) const
 {
     get_iptr(ptr)->print();
 }
 
 
-template <class T, class D, template <class> class Q>
-void counting_manager<T, D, Q>::handle_type::print() const
+template <class T, class D, class A, template <class> class Q>
+void counting_manager<T, D, A, Q>::handle_type::print() const
 {
     std::lock_guard<std::mutex> guard(_parent._freelist_mutex);
     out_tm::out() << "* print in counting reclamation strategy "
@@ -385,15 +400,16 @@ void counting_manager<T, D, Q>::handle_type::print() const
 }
 
 
-template <class T, class D, template <class> class Q>
-typename counting_manager<T, D, Q>::handle_type::internal_type*
-counting_manager<T, D, Q>::handle_type::get_iptr(pointer_type ptr) const
+template <class T, class D, class A, template <class> class Q>
+typename counting_manager<T, D, A, Q>::handle_type::internal_type*
+counting_manager<T, D, A, Q>::handle_type::get_iptr(pointer_type ptr) const
 {
     return static_cast<internal_type*>(mark::clear(ptr));
 }
 
-template <class T, class D, template <class> class Q>
-void counting_manager<T, D, Q>::handle_type::internal_delete(internal_type* ptr)
+template <class T, class D, class A, template <class> class Q>
+void counting_manager<T, D, A, Q>::handle_type::internal_delete(
+    internal_type* ptr)
 {
     if (ptr->reset())
     {

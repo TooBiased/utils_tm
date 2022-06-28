@@ -1,6 +1,7 @@
 #pragma once
 
 #include <atomic>
+#include <memory>
 #include <tuple>
 #include <vector>
 
@@ -22,13 +23,18 @@ namespace dtm = debug_tm;
 
 template <class T,
           class Destructor      = default_destructor<T>,
+          class Allocator       = std::allocator<T>,
           size_t maxThreads     = 64,
           size_t maxProtections = 256>
 class hazard_manager
 {
   private:
-    using this_type = hazard_manager<T, Destructor, maxThreads, maxProtections>;
-    using memo      = concurrency_tm::standard_memory_order_policy;
+    using this_type =
+        hazard_manager<T, Destructor, Allocator, maxThreads, maxProtections>;
+    using memo = concurrency_tm::standard_memory_order_policy;
+    using allocator_type =
+        typename std::allocator_traits<Allocator>::rebind_alloc<T>;
+    using alloc_traits = std::allocator_traits<Allocator>;
 
   public:
     using pointer_type        = T*;
@@ -37,23 +43,22 @@ class hazard_manager
 
     template <class lT   = T,
               class lD   = default_destructor<lT>,
+              class lA   = Allocator,
               size_t lmT = maxThreads,
               size_t lmP = maxProtections>
     struct rebind
     {
-        using other = hazard_manager<lT, lD, lmT, lmP>;
+        using other = hazard_manager<lT, lD, lA, lmT, lmP>;
     };
-
-
 
     hazard_manager(Destructor&& destructor = Destructor())
         : _destructor(std::move(destructor)), _handle_counter(-1)
     {
         for (auto& a : _handles) a.store(nullptr, memo::relaxed);
     }
-    hazard_manager(const hazard_manager&) = delete;
-    hazard_manager& operator=(const hazard_manager&) = delete;
-    hazard_manager(hazard_manager&& other)           = delete;
+    hazard_manager(const hazard_manager&)             = delete;
+    hazard_manager& operator=(const hazard_manager&)  = delete;
+    hazard_manager(hazard_manager&& other)            = delete;
     hazard_manager& operator=(hazard_manager&& other) = delete;
     ~hazard_manager();
 
@@ -88,9 +93,12 @@ class hazard_manager
     class handle_type
     {
       private:
-        using parent_type =
-            hazard_manager<T, Destructor, maxThreads, maxProtections>;
-        using this_type = handle_type;
+        using parent_type = hazard_manager<T,
+                                           Destructor,
+                                           Allocator,
+                                           maxThreads,
+                                           maxProtections>;
+        using this_type   = handle_type;
 
         using istate = typename internal_handle::istate;
 
@@ -100,7 +108,7 @@ class hazard_manager
         using guard_type          = reclamation_guard<T, this_type>;
 
         handle_type(parent_type& parent, internal_handle& internal, int id);
-        handle_type(const handle_type&) = delete;
+        handle_type(const handle_type&)            = delete;
         handle_type& operator=(const handle_type&) = delete;
         // handles should not be moved while other operations are ongoing
         handle_type(handle_type&& other) noexcept;
@@ -144,15 +152,17 @@ class hazard_manager
     void        print() const;
 
   private:
-    Destructor                    _destructor;
+    Destructor     _destructor;
+    allocator_type _allocator;
+
     std::atomic_int               _handle_counter;
     std::atomic<internal_handle*> _handles[maxThreads];
 };
 
 
 
-template <class T, class D, size_t mt, size_t mp>
-hazard_manager<T, D, mt, mp>::~hazard_manager()
+template <class T, class D, class A, size_t mt, size_t mp>
+hazard_manager<T, D, A, mt, mp>::~hazard_manager()
 {
     auto counter = _handle_counter.load(memo::acquire);
     for (int i = counter; i >= 0; --i)
@@ -169,9 +179,9 @@ hazard_manager<T, D, mt, mp>::~hazard_manager()
     }
 }
 
-template <class T, class D, size_t mt, size_t mp>
-typename hazard_manager<T, D, mt, mp>::handle_type
-hazard_manager<T, D, mt, mp>::get_handle()
+template <class T, class D, class A, size_t mt, size_t mp>
+typename hazard_manager<T, D, A, mt, mp>::handle_type
+hazard_manager<T, D, A, mt, mp>::get_handle()
 {
     internal_handle* temp0 = new internal_handle();
     internal_handle* temp1;
@@ -208,15 +218,18 @@ hazard_manager<T, D, mt, mp>::get_handle()
     return handle_type(*this, *temp0, -666);
 }
 
-template <class T, class D, size_t mt, size_t mp>
-void hazard_manager<T, D, mt, mp>::delete_raw(pointer_type ptr)
+template <class T, class D, class A, size_t mt, size_t mp>
+void hazard_manager<T, D, A, mt, mp>::delete_raw(pointer_type ptr)
 {
-    delete mark::clear(ptr);
+    // delete mark::clear(ptr);
+    auto cptr = mark::clear(ptr);
+    alloc_traits::destroy(_allocator, cptr);
+    alloc_traits::deallocate(_allocator, cptr, 1);
 }
 
 
-template <class T, class D, size_t mt, size_t mp>
-void hazard_manager<T, D, mt, mp>::print() const
+template <class T, class D, class A, size_t mt, size_t mp>
+void hazard_manager<T, D, A, mt, mp>::print() const
 {
     otm::out() << "hazard manager print: "
                << _handle_counter.load(memo::acquire) + 1 << "handles"
@@ -231,8 +244,8 @@ void hazard_manager<T, D, mt, mp>::print() const
 
 
 // *** INTERNAL HANDLE *****************************************************
-template <class T, class D, size_t mt, size_t mp>
-int hazard_manager<T, D, mt, mp>::internal_handle::insert(pointer_type ptr)
+template <class T, class D, class A, size_t mt, size_t mp>
+int hazard_manager<T, D, A, mt, mp>::internal_handle::insert(pointer_type ptr)
 {
     auto pos = _counter.fetch_add(1, memo::acquire);
     dtm::if_debug_critical("Error: in insert -- "
@@ -246,9 +259,10 @@ int hazard_manager<T, D, mt, mp>::internal_handle::insert(pointer_type ptr)
     return pos;
 }
 
-template <class T, class D, size_t mt, size_t mp>
-std::pair<typename hazard_manager<T, D, mt, mp>::internal_handle::istate, int>
-hazard_manager<T, D, mt, mp>::internal_handle::remove(pointer_type ptr)
+template <class T, class D, class A, size_t mt, size_t mp>
+std::pair<typename hazard_manager<T, D, A, mt, mp>::internal_handle::istate,
+          int>
+hazard_manager<T, D, A, mt, mp>::internal_handle::remove(pointer_type ptr)
 {
     auto pos = find(ptr);
     if (pos < 0) { return std::make_pair(istate::NOT_FOUND, -1); }
@@ -298,18 +312,20 @@ hazard_manager<T, D, mt, mp>::internal_handle::remove(pointer_type ptr)
     return std::make_pair(was_marked ? istate::MARKED : istate::UNMARKED, pos);
 }
 
-template <class T, class D, size_t mt, size_t mp>
-typename hazard_manager<T, D, mt, mp>::internal_handle::istate
-hazard_manager<T, D, mt, mp>::internal_handle::replace(int i, pointer_type ptr)
+template <class T, class D, class A, size_t mt, size_t mp>
+typename hazard_manager<T, D, A, mt, mp>::internal_handle::istate
+hazard_manager<T, D, A, mt, mp>::internal_handle::replace(int          i,
+                                                          pointer_type ptr)
 {
     auto temp = _ptr[i].exchange(ptr, memo::acq_rel);
     return mark::get_mark<0>(temp) ? istate::MARKED : istate::UNMARKED;
 }
 
 // has to work concurrently
-template <class T, class D, size_t mt, size_t mp>
-typename hazard_manager<T, D, mt, mp>::internal_handle::istate
-hazard_manager<T, D, mt, mp>::internal_handle::mark(pointer_type ptr, int pos)
+template <class T, class D, class A, size_t mt, size_t mp>
+typename hazard_manager<T, D, A, mt, mp>::internal_handle::istate
+hazard_manager<T, D, A, mt, mp>::internal_handle::mark(pointer_type ptr,
+                                                       int          pos)
 {
     auto temp = pos;
     if (pos < 0) temp = _counter.load(memo::acquire) - 1;
@@ -338,8 +354,9 @@ hazard_manager<T, D, mt, mp>::internal_handle::mark(pointer_type ptr, int pos)
     return istate::NOT_FOUND;
 }
 
-template <class T, class D, size_t mt, size_t mp>
-int hazard_manager<T, D, mt, mp>::internal_handle::find(pointer_type ptr) const
+template <class T, class D, class A, size_t mt, size_t mp>
+int hazard_manager<T, D, A, mt, mp>::internal_handle::find(
+    pointer_type ptr) const
 {
     auto temp = _counter.load(memo::acquire);
     dtm::if_debug("Error: in find -- "
@@ -357,8 +374,8 @@ int hazard_manager<T, D, mt, mp>::internal_handle::find(pointer_type ptr) const
     return -1;
 }
 
-template <class T, class D, size_t mt, size_t mp>
-void hazard_manager<T, D, mt, mp>::internal_handle::print() const
+template <class T, class D, class A, size_t mt, size_t mp>
+void hazard_manager<T, D, A, mt, mp>::internal_handle::print() const
 {
 
     auto temp = _counter.load(memo::acquire);
@@ -369,24 +386,24 @@ void hazard_manager<T, D, mt, mp>::internal_handle::print() const
 
 // *** HANDLE **************************************************************
 // ***** HANDLE CONSTRUCTORS ***********************************************
-template <class T, class D, size_t mt, size_t mp>
-hazard_manager<T, D, mt, mp>::handle_type::handle_type(
+template <class T, class D, class A, size_t mt, size_t mp>
+hazard_manager<T, D, A, mt, mp>::handle_type::handle_type(
     parent_type& parent, internal_handle& internal, int id)
     : n(0), _parent(parent), _internal(internal), _id(id)
 {
 }
 
-template <class T, class D, size_t mt, size_t mp>
-hazard_manager<T, D, mt, mp>::handle_type::handle_type(
+template <class T, class D, class A, size_t mt, size_t mp>
+hazard_manager<T, D, A, mt, mp>::handle_type::handle_type(
     handle_type&& source) noexcept
     : _parent(source._parent), _internal(source._internal), _id(source._id)
 {
     source._id = -1;
 }
 
-template <class T, class D, size_t mt, size_t mp>
-typename hazard_manager<T, D, mt, mp>::handle_type&
-hazard_manager<T, D, mt, mp>::handle_type::operator=(
+template <class T, class D, class A, size_t mt, size_t mp>
+typename hazard_manager<T, D, A, mt, mp>::handle_type&
+hazard_manager<T, D, A, mt, mp>::handle_type::operator=(
     handle_type&& source) noexcept
 {
     if (&source == this) return *this;
@@ -395,8 +412,8 @@ hazard_manager<T, D, mt, mp>::handle_type::operator=(
     return *this;
 }
 
-template <class T, class D, size_t mt, size_t mp>
-hazard_manager<T, D, mt, mp>::handle_type::~handle_type()
+template <class T, class D, class A, size_t mt, size_t mp>
+hazard_manager<T, D, A, mt, mp>::handle_type::~handle_type()
 {
     if (_id < 0) return;
 
@@ -413,17 +430,20 @@ hazard_manager<T, D, mt, mp>::handle_type::~handle_type()
 
 
 // ***** HANDLE FUNCTIONALITY **********************************************
-template <class T, class D, size_t mt, size_t mp>
+template <class T, class D, class A, size_t mt, size_t mp>
 template <class... Args>
-T* hazard_manager<T, D, mt, mp>::handle_type::create_pointer(
+T* hazard_manager<T, D, A, mt, mp>::handle_type::create_pointer(
     Args&&... args) const
 {
-    auto temp = new T(std::forward<Args>(args)...);
+    // auto temp = new T(std::forward<Args>(args)...);
+    auto temp = alloc_traits::allocate(_parent._allocator, 1);
+    alloc_traits::construct(_parent._allocator, temp,
+                            std::forward<Args>(args)...);
     return temp;
 }
 
-template <class T, class D, size_t mt, size_t mp>
-T* hazard_manager<T, D, mt, mp>::handle_type::protect(
+template <class T, class D, class A, size_t mt, size_t mp>
+T* hazard_manager<T, D, A, mt, mp>::handle_type::protect(
     const atomic_pointer_type& ptr)
 {
     ++n;
@@ -450,15 +470,15 @@ T* hazard_manager<T, D, mt, mp>::handle_type::protect(
     return temp1;
 }
 
-template <class T, class D, size_t mt, size_t mp>
-void hazard_manager<T, D, mt, mp>::handle_type::protect_raw(pointer_type ptr)
+template <class T, class D, class A, size_t mt, size_t mp>
+void hazard_manager<T, D, A, mt, mp>::handle_type::protect_raw(pointer_type ptr)
 {
     ++n;
     _internal.insert(mark::clear(ptr));
 }
 
-template <class T, class D, size_t mt, size_t mp>
-void hazard_manager<T, D, mt, mp>::handle_type::unprotect(pointer_type ptr)
+template <class T, class D, class A, size_t mt, size_t mp>
+void hazard_manager<T, D, A, mt, mp>::handle_type::unprotect(pointer_type ptr)
 {
     --n;
     auto cptr      = mark::clear(ptr);
@@ -468,30 +488,30 @@ void hazard_manager<T, D, mt, mp>::handle_type::unprotect(pointer_type ptr)
     if (st == istate::MARKED) continue_deletion(cptr, pos);
 }
 
-template <class T, class D, size_t mt, size_t mp>
-void hazard_manager<T, D, mt, mp>::handle_type::unprotect(
+template <class T, class D, class A, size_t mt, size_t mp>
+void hazard_manager<T, D, A, mt, mp>::handle_type::unprotect(
     std::vector<pointer_type>& vec)
 {
     for (auto ptr : vec) { unprotect(ptr); }
 }
 
-template <class T, class D, size_t mt, size_t mp>
-typename hazard_manager<T, D, mt, mp>::handle_type::guard_type
-hazard_manager<T, D, mt, mp>::handle_type::guard(
+template <class T, class D, class A, size_t mt, size_t mp>
+typename hazard_manager<T, D, A, mt, mp>::handle_type::guard_type
+hazard_manager<T, D, A, mt, mp>::handle_type::guard(
     const atomic_pointer_type& aptr)
 {
     return make_rec_guard(*this, aptr);
 }
 
-template <class T, class D, size_t mt, size_t mp>
-typename hazard_manager<T, D, mt, mp>::handle_type::guard_type
-hazard_manager<T, D, mt, mp>::handle_type::guard(pointer_type aptr)
+template <class T, class D, class A, size_t mt, size_t mp>
+typename hazard_manager<T, D, A, mt, mp>::handle_type::guard_type
+hazard_manager<T, D, A, mt, mp>::handle_type::guard(pointer_type aptr)
 {
     return make_rec_guard(*this, aptr);
 }
 
-template <class T, class D, size_t mt, size_t mp>
-void hazard_manager<T, D, mt, mp>::handle_type::safe_delete(pointer_type ptr)
+template <class T, class D, class A, size_t mt, size_t mp>
+void hazard_manager<T, D, A, mt, mp>::handle_type::safe_delete(pointer_type ptr)
 {
     auto cptr = mark::clear(ptr);
     for (int i = _parent._handle_counter.load(memo::acquire); i >= 0; --i)
@@ -504,15 +524,17 @@ void hazard_manager<T, D, mt, mp>::handle_type::safe_delete(pointer_type ptr)
     _parent._destructor.destroy(*this, ptr);
 }
 
-template <class T, class D, size_t mt, size_t mp>
-void hazard_manager<T, D, mt, mp>::handle_type::delete_raw(pointer_type ptr)
+template <class T, class D, class A, size_t mt, size_t mp>
+void hazard_manager<T, D, A, mt, mp>::handle_type::delete_raw(pointer_type ptr)
 {
+    // delete mark::clear(ptr);
     auto cptr = mark::clear(ptr);
-    delete mark::clear(cptr);
+    alloc_traits::destroy(_parent._allocator, cptr);
+    alloc_traits::deallocate(_parent._allocator, cptr, 1);
 }
 
-template <class T, class D, size_t mt, size_t mp>
-bool hazard_manager<T, D, mt, mp>::handle_type::is_safe(pointer_type ptr)
+template <class T, class D, class A, size_t mt, size_t mp>
+bool hazard_manager<T, D, A, mt, mp>::handle_type::is_safe(pointer_type ptr)
 {
     auto cptr = mark::clear(ptr);
     for (int i = _parent._handle_counter.load(memo::acquire); i >= 0; --i)
@@ -524,8 +546,8 @@ bool hazard_manager<T, D, mt, mp>::handle_type::is_safe(pointer_type ptr)
     return true;
 }
 
-template <class T, class D, size_t mt, size_t mp>
-void hazard_manager<T, D, mt, mp>::handle_type::print(pointer_type ptr)
+template <class T, class D, class A, size_t mt, size_t mp>
+void hazard_manager<T, D, A, mt, mp>::handle_type::print(pointer_type ptr)
 {
     auto cptr = mark::clear(ptr);
     for (int i = _parent._handle_counter.load(memo::acquire); i >= 0; --i)
@@ -538,8 +560,8 @@ void hazard_manager<T, D, mt, mp>::handle_type::print(pointer_type ptr)
 }
 
 // ***** HANDLE HELPER FUNCTION ********************************************
-template <class T, class D, size_t mt, size_t mp>
-void hazard_manager<T, D, mt, mp>::handle_type::continue_deletion(
+template <class T, class D, class A, size_t mt, size_t mp>
+void hazard_manager<T, D, A, mt, mp>::handle_type::continue_deletion(
     pointer_type ptr, int pos)
 {
     auto temp = _internal.mark(ptr, pos);
@@ -555,8 +577,8 @@ void hazard_manager<T, D, mt, mp>::handle_type::continue_deletion(
     _parent._destructor.destroy(*this, ptr);
 }
 
-template <class T, class D, size_t mt, size_t mp>
-void hazard_manager<T, D, mt, mp>::handle_type::print() const
+template <class T, class D, class A, size_t mt, size_t mp>
+void hazard_manager<T, D, A, mt, mp>::handle_type::print() const
 {
     out_tm::out() << "* print in hazard reclamation handle "
                   << _internal._counter.load(memo::acquire)
