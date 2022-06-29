@@ -39,3 +39,39 @@ target_link_libraries(slinked_list_test PRIVATE Threads::Threads)
 
 add_executable( protected_list_test src/test_protected_list.cpp)
 target_link_libraries(protected_list_test PRIVATE Threads::Threads)
+
+
+message(STATUS "Looking for Intel TBB.")
+find_package(TBB)
+if (NOT TBB_FOUND)
+  message(STATUS "Looking for Intel TBB. -- not found. "
+    "memPool cannot be used!")
+else()
+  message(STATUS "Looking for Intel TBB. -- found")
+endif()
+
+message(STATUS "Looking for jemalloc.")
+find_package(PkgConfig REQUIRED)
+pkg_check_modules (JEMALLOC jemalloc)
+pkg_search_module (JEMALLOC jemalloc)
+
+if (NOT JEMALLOC_FOUND)
+  message(STATUS "Looking for jemalloc. -- not found. "
+    "memPool cannot be used!")
+else()
+  message(STATUS "Looking for jemalloc. -- found")
+endif()
+
+add_executable( allocator_test src/test_allocators.cpp)
+target_link_libraries(allocator_test PRIVATE Threads::Threads)
+if (TBB_FOUND)
+target_link_libraries(allocator_test PRIVATE TBB::tbbmalloc)
+else()
+target_compile_definitions(allocator_test PRIVATE -D NO_TBB)
+endif()
+if (JEMALLOC_FOUND)
+  message(STATUS "${JEMALLOC_LINK_LIBRARIES}")
+  target_link_libraries(allocator_test PRIVATE ${JEMALLOC_LINK_LIBRARIES})
+else()
+target_compile_definitions(allocator_test PRIVATE -D NO_JEMALLOC)
+endif()

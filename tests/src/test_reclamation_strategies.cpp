@@ -17,12 +17,13 @@ using c       = otm::color;
 
 void print_help()
 {
-    otm::out() << "This is a test for our hazard pointer implementation\n"
+    otm::out() << "This is a test for our memory reclamation implementations\n"
                << c::magenta + "* Executable\n"
-               << "   bench/hazard_test.cpp.\n"
+               << "   tests/src/hazard_test.cpp.\n"
                << c::magenta + "* Test subject\n"
-               << "   " << c::green + "proj::hazard_tm::hazard_manager"
-               << " from " << c::yellow + "impl/hazard.h"
+               << "   "
+               << c::green + "hazard_manager, counting_manager, delayed_manager"
+               << " from " << c::yellow + "memory_reclamation/..."
                << "\n"
                << c::magenta + "* Process\n"
                << "   Main: the main thread repeats the following it times\n"
