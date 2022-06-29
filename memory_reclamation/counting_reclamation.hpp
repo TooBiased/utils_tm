@@ -173,7 +173,8 @@ counting_manager<T, D, A, Q>::~counting_manager()
     // std::lock_guard<std::mutex> guard(_freelist_mutex);
     for (auto ptr : _freelist)
     {
-        alloc_traits::destroy(_allocator, ptr);
+        // alloc_traits::destroy(_allocator, ptr);
+        // the elements were already deleted out of the internal objects
         alloc_traits::deallocate(_allocator, ptr, 1);
     }
 }
