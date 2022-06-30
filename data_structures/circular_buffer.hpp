@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <memory>
 #include <optional>
 
 namespace utils_tm
@@ -10,25 +11,32 @@ namespace utils_tm
 
 // This structure is owned by one thread, and is meant to pass inputs
 // to that thread
-template <class T>
+template <class T, class Allocator = std::allocator<T>>
 class circular_buffer
 {
-  private:
-    using this_type = circular_buffer<T>;
+  public:
+    using this_type  = circular_buffer<T, Allocator>;
+    using value_type = T;
+    using allocator_type =
+        typename std::allocator_traits<Allocator>::rebind_alloc<value_type>;
+    using alloc_traits = std::allocator_traits<allocator_type>;
+    using pointer      = typename alloc_traits::pointer;
 
-    size_t _start;
-    size_t _end;
-    size_t _bitmask;
-    T*     _buffer;
+
+    [[no_unique_address]] allocator_type _allocator;
+    size_t                               _start;
+    size_t                               _end;
+    size_t                               _bitmask;
+    T*                                   _buffer;
 
   public:
-    using value_type = T;
-
-    circular_buffer(size_t capacity = 128);
-    circular_buffer(const circular_buffer&)            = delete;
-    circular_buffer& operator=(const circular_buffer&) = delete;
-    circular_buffer(circular_buffer&& other);
-    circular_buffer& operator=(circular_buffer&& rhs);
+    circular_buffer(size_t capacity, allocator_type alloc = {});
+    circular_buffer(allocator_type alloc = {});
+    circular_buffer(const circular_buffer& other, allocator_type alloc = {});
+    circular_buffer& operator=(const circular_buffer&);
+    circular_buffer(circular_buffer&& other) noexcept;
+    circular_buffer(circular_buffer&& other, allocator_type) noexcept;
+    circular_buffer& operator=(circular_buffer&& rhs) noexcept;
     ~circular_buffer();
 
     inline void push_back(const T& e);
@@ -41,8 +49,9 @@ class circular_buffer
     inline std::optional<T> pop_back();
     inline std::optional<T> pop_front();
 
-    size_t size() const;
-    size_t capacity() const;
+    size_t         size() const;
+    size_t         capacity() const;
+    allocator_type get_allocator() const { return _allocator; }
 
     template <bool is_const>
     class iterator_base
@@ -117,25 +126,66 @@ class circular_buffer
 
 
 // CTORS AND DTOR !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-template <class T>
-circular_buffer<T>::circular_buffer(size_t capacity) : _start(0), _end(0)
+template <class T, class A>
+circular_buffer<T, A>::circular_buffer(size_t capacity, allocator_type alloc)
+    : _allocator(alloc), _start(0), _end(0)
 {
     size_t tcap = 1;
     while (tcap < capacity) tcap <<= 1;
 
-    _buffer  = static_cast<T*>(malloc(sizeof(T) * tcap));
+    //_buffer  = static_cast<T*>(malloc(sizeof(T) * tcap));
+    _buffer  = alloc_traits::allocate(_allocator, tcap);
     _bitmask = tcap - 1;
 }
 
-template <class T>
-circular_buffer<T>::circular_buffer(circular_buffer&& other)
+template <class T, class A>
+circular_buffer<T, A>::circular_buffer(allocator_type alloc)
+    : _allocator(alloc), _start(0), _end(0), _bitmask(0), _buffer(nullptr)
+{
+}
+
+template <class T, class A>
+circular_buffer<T, A>::circular_buffer(const circular_buffer& other,
+                                       allocator_type         alloc)
+    : _allocator(alloc), //
+      _bitmask(other._bitmask)
+{
+    _buffer = alloc_traits::allocate(_allocator, _bitmask + 1);
+    for (auto curr : other) { push_back(curr); }
+}
+
+template <class T, class A>
+circular_buffer<T, A>&
+circular_buffer<T, A>::operator=(const circular_buffer& other)
+{
+    if (&other == this) return *this;
+
+    this->~this_type();
+    new (this) circular_buffer(
+        other, other.get_allocator()); // in theory we would have to check
+                                       // propagate_allocator_on_copy here
+    return *this;
+}
+
+template <class T, class A>
+circular_buffer<T, A>::circular_buffer(circular_buffer&& other) noexcept
     : _bitmask(other._bitmask), _buffer(other._buffer)
 {
     other._buffer = nullptr;
 }
 
-template <class T>
-circular_buffer<T>& circular_buffer<T>::operator=(circular_buffer&& other)
+template <class T, class A>
+circular_buffer<T, A>::circular_buffer(circular_buffer&& other,
+                                       allocator_type    alloc) noexcept
+    : allocator_type(std::move(alloc)), //
+      _bitmask(other._bitmask), _buffer(other._buffer)
+{
+    other._buffer = nullptr;
+}
+
+template <class T, class A>
+circular_buffer<T, A>&
+circular_buffer<T, A>::operator=(circular_buffer&& other) noexcept
 {
     if (&other == this) return *this;
 
@@ -144,107 +194,118 @@ circular_buffer<T>& circular_buffer<T>::operator=(circular_buffer&& other)
     return *this;
 }
 
-template <class T>
-circular_buffer<T>::~circular_buffer()
+template <class T, class A>
+circular_buffer<T, A>::~circular_buffer()
 {
+    if (!_buffer) return;
     cleanup();
-    free(_buffer);
+    // free(_buffer);
+    alloc_traits::deallocate(_allocator, _buffer, _bitmask + 1);
 }
 
 
 
 
 // MAIN FUNCTIONALITY !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-template <class T>
-void circular_buffer<T>::push_back(const T& e)
+template <class T, class A>
+void circular_buffer<T, A>::push_back(const T& e)
 {
 
     if (_end > _start + _bitmask) grow();
 
-    _buffer[mod(_end)] = e;
-    _end               = inc(_end);
-}
-
-template <class T>
-void circular_buffer<T>::push_front(const T& e)
-{
-    if (_end > _start + _bitmask) grow();
-
-    _start               = dec(_start);
-    _buffer[mod(_start)] = e;
-}
-
-template <class T>
-template <class... Args>
-void circular_buffer<T>::emplace_back(Args&&... args)
-{
-
-    if (_end > _start + _bitmask) grow();
-
-    new (&_buffer[mod(_end)]) T(std::forward<Args>(args)...);
+    //_buffer[mod(_end)] = e;
+    alloc_traits::construct(_allocator, _buffer + mod(_end), e);
     _end = inc(_end);
 }
 
-template <class T>
-template <class... Args>
-void circular_buffer<T>::emplace_front(Args&&... args)
+template <class T, class A>
+void circular_buffer<T, A>::push_front(const T& e)
 {
     if (_end > _start + _bitmask) grow();
 
     _start = dec(_start);
-    new (&_buffer[mod(_start)]) T(std::forward<Args>(args)...);
+    //_buffer[mod(_start)] = e;
+    alloc_traits::construct(_allocator, _buffer + mod(_start), e);
 }
 
-template <class T>
-std::optional<T> circular_buffer<T>::pop_back()
+template <class T, class A>
+template <class... Args>
+void circular_buffer<T, A>::emplace_back(Args&&... args)
+{
+
+    if (_end > _start + _bitmask) grow();
+
+    // new (&_buffer[mod(_end)]) T(std::forward<Args>(args)...);
+    alloc_traits::construct(_allocator, _buffer + mod(_end),
+                            std::forward<Args>(args)...);
+    _end = inc(_end);
+}
+
+template <class T, class A>
+template <class... Args>
+void circular_buffer<T, A>::emplace_front(Args&&... args)
+{
+    if (_end > _start + _bitmask) grow();
+
+    _start = dec(_start);
+    // new (&_buffer[mod(_start)]) T(std::forward<Args>(args)...);
+    alloc_traits::construct(_allocator, _buffer + mod(_start),
+                            std::forward<Args>(args)...);
+}
+
+template <class T, class A>
+std::optional<T> circular_buffer<T, A>::pop_back()
 {
     if (_start == _end) { return {}; }
 
     _end        = dec(_end);
     auto result = std::make_optional(std::move(_buffer[mod(_end)]));
-    _buffer[mod(_end)].~T();
+    // _buffer[mod(_end)].~T();
+    alloc_traits::destroy(_allocator, _buffer + mod(_end));
     return result;
 }
 
-template <class T>
-std::optional<T> circular_buffer<T>::pop_front()
+template <class T, class A>
+std::optional<T> circular_buffer<T, A>::pop_front()
 {
     if (_start == _end) { return {}; }
 
     auto result = std::make_optional(std::move(_buffer[mod(_start)]));
-    _buffer[mod(_start)].~T();
+    // _buffer[mod(_start)].~T();
+    alloc_traits::destroy(_allocator, _buffer + mod(_start));
     _start = inc(_start);
     return result;
 }
 
 
 // SIZE AND CAPACITY !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-template <class T>
-size_t circular_buffer<T>::size() const
+template <class T, class A>
+size_t circular_buffer<T, A>::size() const
 {
     return _end - _start;
 }
 
-template <class T>
-size_t circular_buffer<T>::capacity() const
+template <class T, class A>
+size_t circular_buffer<T, A>::capacity() const
 {
     return _bitmask + 1;
 }
 
 
 // HELPER FUNCTIONS !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-template <class T>
-size_t circular_buffer<T>::compare_offsets(size_t lhs, size_t rhs) const
+template <class T, class A>
+size_t circular_buffer<T, A>::compare_offsets(size_t lhs, size_t rhs) const
 {
     if (lhs == rhs) return 0;
     return (lhs < rhs) ? -1 : 1;
 }
 
-template <class T>
-void circular_buffer<T>::grow()
+template <class T, class A>
+void circular_buffer<T, A>::grow()
 {
     auto nbitmask = (_bitmask << 1) + 1;
-    auto nbuffer  = static_cast<T*>(malloc(sizeof(T) * (nbitmask + 1)));
+    // auto nbuffer  = static_cast<T*>(malloc(sizeof(T) * (nbitmask + 1)));
+    auto nbuffer = alloc_traits::allocate(_allocator, nbitmask + 1);
 
     size_t i = 0;
     for (iterator it = begin(); it != end(); ++it)
@@ -252,27 +313,31 @@ void circular_buffer<T>::grow()
         nbuffer[i++] = std::move(*it);
         it->~T();
     }
-    // std::fill(nbuffer + i, nbuffer + nbitmask + 1, T());
 
-    free(_buffer);
+    // free(_buffer);
+    alloc_traits::deallocate(_allocator, _buffer, _bitmask + 1);
     _start   = 0;
     _end     = i;
     _bitmask = nbitmask;
     _buffer  = nbuffer;
 }
 
-template <class T>
-void circular_buffer<T>::cleanup()
+template <class T, class A>
+void circular_buffer<T, A>::cleanup()
 {
-    for (iterator it = begin(); it != end(); ++it) { it->~T(); }
+    for (pointer it = _buffer; it <= _buffer + _bitmask; ++it)
+    {
+        // it->~T();
+        alloc_traits::destroy(_allocator, it);
+    }
     _start = _end = 0;
 }
 
 
 // ITERATOR STUFF !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-// template <class T> template <bool b>
-// typename circular_buffer<T>::template iterator_base<b>&
-// circular_buffer<T>::iterator_base<b>::operator=(const iterator_base& rhs)
+// template <class T, class A> template <bool b>
+// typename circular_buffer<T, A>::template iterator_base<b>&
+// circular_buffer<T, A>::iterator_base<b>::operator=(const iterator_base& rhs)
 // {
 //     if (this == &rhs) return *this;
 
@@ -281,124 +346,124 @@ void circular_buffer<T>::cleanup()
 //     return *this;
 // }
 
-template <class T>
+template <class T, class A>
 template <bool b>
-typename circular_buffer<T>::template iterator_base<b>::reference
-circular_buffer<T>::iterator_base<b>::operator*() const
+typename circular_buffer<T, A>::template iterator_base<b>::reference
+circular_buffer<T, A>::iterator_base<b>::operator*() const
 {
     return _circular->_buffer[_circular->mod(_off)];
 }
 
-template <class T>
+template <class T, class A>
 template <bool b>
-typename circular_buffer<T>::template iterator_base<b>::pointer
-circular_buffer<T>::iterator_base<b>::operator->() const
+typename circular_buffer<T, A>::template iterator_base<b>::pointer
+circular_buffer<T, A>::iterator_base<b>::operator->() const
 {
     return _circular->_buffer + _circular->mod(_off);
 }
 
-template <class T>
+template <class T, class A>
 template <bool b>
-typename circular_buffer<T>::template iterator_base<b>::reference
-circular_buffer<T>::iterator_base<b>::operator[](difference_type d) const
+typename circular_buffer<T, A>::template iterator_base<b>::reference
+circular_buffer<T, A>::iterator_base<b>::operator[](difference_type d) const
 {
     return _circular->_buffer[_circular->mod(_circular->inc(_off, d))];
 }
 
 
-template <class T>
+template <class T, class A>
 template <bool b>
-typename circular_buffer<T>::template iterator_base<b>&
-circular_buffer<T>::iterator_base<b>::operator+=(difference_type rhs)
+typename circular_buffer<T, A>::template iterator_base<b>&
+circular_buffer<T, A>::iterator_base<b>::operator+=(difference_type rhs)
 {
     _off = _circular->inc(_off, rhs);
 }
 
-template <class T>
+template <class T, class A>
 template <bool b>
-typename circular_buffer<T>::template iterator_base<b>&
-circular_buffer<T>::iterator_base<b>::operator-=(difference_type rhs)
+typename circular_buffer<T, A>::template iterator_base<b>&
+circular_buffer<T, A>::iterator_base<b>::operator-=(difference_type rhs)
 {
     _off = _circular->dec(_off, rhs);
 }
 
-template <class T>
+template <class T, class A>
 template <bool b>
-typename circular_buffer<T>::template iterator_base<b>&
-circular_buffer<T>::iterator_base<b>::operator++()
+typename circular_buffer<T, A>::template iterator_base<b>&
+circular_buffer<T, A>::iterator_base<b>::operator++()
 {
     _off = _circular->inc(_off);
     return *this;
 }
 
-template <class T>
+template <class T, class A>
 template <bool b>
-typename circular_buffer<T>::template iterator_base<b>&
-circular_buffer<T>::iterator_base<b>::operator--()
+typename circular_buffer<T, A>::template iterator_base<b>&
+circular_buffer<T, A>::iterator_base<b>::operator--()
 {
     _off = _circular->dec(_off);
     return *this;
 }
 
-template <class T>
+template <class T, class A>
 template <bool b>
-typename circular_buffer<T>::template iterator_base<b>
-circular_buffer<T>::iterator_base<b>::operator+(difference_type rhs) const
+typename circular_buffer<T, A>::template iterator_base<b>
+circular_buffer<T, A>::iterator_base<b>::operator+(difference_type rhs) const
 {
     return iterator_base(_circular, _circular->inc(rhs));
 }
 
-template <class T>
+template <class T, class A>
 template <bool b>
-typename circular_buffer<T>::template iterator_base<b>
-circular_buffer<T>::iterator_base<b>::operator-(difference_type rhs) const
+typename circular_buffer<T, A>::template iterator_base<b>
+circular_buffer<T, A>::iterator_base<b>::operator-(difference_type rhs) const
 {
     return iterator_base(_circular, _circular->dec(rhs));
 }
 
-template <class T>
+template <class T, class A>
 template <bool b>
-bool circular_buffer<T>::iterator_base<b>::operator==(
+bool circular_buffer<T, A>::iterator_base<b>::operator==(
     const iterator_base& other) const
 {
     return (_circular == other._circular) && (_off == other._off);
 }
 
-template <class T>
+template <class T, class A>
 template <bool b>
-bool circular_buffer<T>::iterator_base<b>::operator!=(
+bool circular_buffer<T, A>::iterator_base<b>::operator!=(
     const iterator_base& other) const
 {
     return (_circular != other._circular) || (_off != other._off);
 }
 
-template <class T>
+template <class T, class A>
 template <bool b>
-bool circular_buffer<T>::iterator_base<b>::operator<(
+bool circular_buffer<T, A>::iterator_base<b>::operator<(
     const iterator_base& other) const
 {
     return _circular->compare_offsets(_off, other._off) < 0;
 }
 
-template <class T>
+template <class T, class A>
 template <bool b>
-bool circular_buffer<T>::iterator_base<b>::operator>(
+bool circular_buffer<T, A>::iterator_base<b>::operator>(
     const iterator_base& other) const
 {
     return _circular->compare_offsets(_off, other._off) > 0;
 }
 
-template <class T>
+template <class T, class A>
 template <bool b>
-bool circular_buffer<T>::iterator_base<b>::operator<=(
+bool circular_buffer<T, A>::iterator_base<b>::operator<=(
     const iterator_base& other) const
 {
     return _circular->compare_offsets(_off, other._off) <= 0;
 }
 
-template <class T>
+template <class T, class A>
 template <bool b>
-bool circular_buffer<T>::iterator_base<b>::operator>=(
+bool circular_buffer<T, A>::iterator_base<b>::operator>=(
     const iterator_base& other) const
 {
     return _circular->compare_offsets(_off, other._off) >= 0;

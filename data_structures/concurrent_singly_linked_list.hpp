@@ -8,7 +8,7 @@
 namespace utils_tm
 {
 
-template <class T>
+template <class T, class Allocator = std::allocator<T>>
 class concurrent_singly_linked_list
 {
   private:
@@ -47,7 +47,7 @@ class concurrent_singly_linked_list
         using iterator_category = std::forward_iterator_tag;
 
         iterator_base(item_ptr ptr) : _ptr(ptr) {}
-        iterator_base(const iterator_base& other) = default;
+        iterator_base(const iterator_base& other)            = default;
         iterator_base& operator=(const iterator_base& other) = default;
         ~iterator_base()                                     = default;
 
@@ -60,23 +60,40 @@ class concurrent_singly_linked_list
         inline bool operator!=(const iterator_base& other) const;
     };
 
-    std::atomic<queue_item_type*> _head;
-
   public:
     using value_type          = T;
     using reference_type      = T&;
     using pointer_type        = T*;
     using iterator_type       = iterator_base<false>;
     using const_iterator_type = iterator_base<true>;
+    using allocator_type      = typename std::allocator_traits<
+        Allocator>::rebind_alloc<queue_item_type>;
+    using alloc_traits = std::allocator_traits<allocator_type>;
 
-    concurrent_singly_linked_list() : _head(nullptr) {}
-    concurrent_singly_linked_list(const concurrent_singly_linked_list&) =
-        delete;
+  private:
+    using queue_item_ptr = queue_item_type*;
+
+    [[no_unique_address]] allocator_type _allocator;
+    std::atomic<queue_item_ptr>          _head;
+
+  public:
+    concurrent_singly_linked_list(allocator_type alloc = {})
+        : _allocator(alloc), _head(nullptr)
+    {
+    }
+
+    concurrent_singly_linked_list(const concurrent_singly_linked_list& other,
+                                  allocator_type alloc = {});
     concurrent_singly_linked_list&
-    operator=(const concurrent_singly_linked_list&) = delete;
-    concurrent_singly_linked_list(concurrent_singly_linked_list&& source);
+    operator=(const concurrent_singly_linked_list&);
+
+    concurrent_singly_linked_list(
+        concurrent_singly_linked_list&& source) noexcept;
+    concurrent_singly_linked_list(concurrent_singly_linked_list&& source,
+                                  allocator_type alloc) noexcept;
     concurrent_singly_linked_list&
-    operator=(concurrent_singly_linked_list&& source);
+    operator=(concurrent_singly_linked_list&& source) noexcept;
+
     ~concurrent_singly_linked_list();
 
     template <class... Args>
@@ -87,7 +104,8 @@ class concurrent_singly_linked_list
     iterator_type find(const T& element);
     bool          contains(const T& element);
 
-    size_t size() const;
+    size_t         size() const;
+    allocator_type get_allocator() const { return _allocator; }
 
     inline iterator_type       begin();
     inline const_iterator_type begin() const;
@@ -97,17 +115,57 @@ class concurrent_singly_linked_list
     inline const_iterator_type cend() const;
 };
 
-template <class T>
-concurrent_singly_linked_list<T>::concurrent_singly_linked_list(
-    concurrent_singly_linked_list&& source)
+
+
+template <class T, class A>
+concurrent_singly_linked_list<T, A>::concurrent_singly_linked_list(
+    const concurrent_singly_linked_list& source, allocator_type alloc)
+    : _allocator(alloc)
 {
-    auto temp = source._head.exchange(nullptr, memo::acq_rel);
-    _head.store(temp, memo::relaxed);
+    std::atomic<queue_item_ptr>* prev = &_head;
+    for (auto curr : source)
+    {
+        // using push would reorder the queue
+        auto temp = alloc_traits::allocate(_allocator, 1);
+        alloc_traits::construct(_allocator, temp, curr);
+        prev->store(temp, memo::relaxed);
+        prev = &(temp->next);
+    }
 }
 
-template <class T>
-concurrent_singly_linked_list<T>& concurrent_singly_linked_list<T>::operator=(
-    concurrent_singly_linked_list&& source)
+template <class T, class A>
+concurrent_singly_linked_list<T, A>&
+concurrent_singly_linked_list<T, A>::operator=(
+    const concurrent_singly_linked_list& source)
+{
+    if (this == &source) return *this;
+    this->~concurrent_singly_linked_list();
+    new (this) concurrent_singly_linked_list(source, source.get_allocator());
+    return *this;
+}
+
+
+
+template <class T, class A>
+concurrent_singly_linked_list<T, A>::concurrent_singly_linked_list(
+    concurrent_singly_linked_list&& source) noexcept
+    : _allocator(source._allocator),
+      _head(source._head.exchange(nullptr, memo::acq_rel))
+{
+}
+
+template <class T, class A>
+concurrent_singly_linked_list<T, A>::concurrent_singly_linked_list(
+    concurrent_singly_linked_list&& source, allocator_type alloc) noexcept
+    : _allocator(alloc), //
+      _head(source._head.exchange(nullptr, memo::acq_rel))
+{
+}
+
+template <class T, class A>
+concurrent_singly_linked_list<T, A>&
+concurrent_singly_linked_list<T, A>::operator=(
+    concurrent_singly_linked_list&& source) noexcept
 {
     if (this == &source) return *this;
     this->~concurrent_singly_linked_list();
@@ -115,37 +173,44 @@ concurrent_singly_linked_list<T>& concurrent_singly_linked_list<T>::operator=(
     return *this;
 }
 
-template <class T>
-concurrent_singly_linked_list<T>::~concurrent_singly_linked_list()
+
+template <class T, class A>
+concurrent_singly_linked_list<T, A>::~concurrent_singly_linked_list()
 {
     auto temp = _head.exchange(nullptr, memo::relaxed);
     while (temp)
     {
         auto next = temp->next.load(memo::relaxed);
-        delete temp;
+        // delete temp;
+        alloc_traits::destroy(_allocator, temp);
+        alloc_traits::deallocate(_allocator, temp, 1);
         temp = next;
     }
 }
 
 
 
-template <class T>
+template <class T, class A>
 template <class... Args>
-void concurrent_singly_linked_list<T>::emplace(Args&&... args)
+void concurrent_singly_linked_list<T, A>::emplace(Args&&... args)
 {
-    queue_item_type* item = new queue_item_type(std::forward<Args>(args)...);
+    // queue_item_type* item = new queue_item_type(std::forward<Args>(args)...);
+    queue_item_type* item = alloc_traits::allocate(_allocator, 1);
+    alloc_traits::construct(_allocator, item, std::forward<Args>(args)...);
     push(item);
 }
 
-template <class T>
-void concurrent_singly_linked_list<T>::push(const T& element)
+template <class T, class A>
+void concurrent_singly_linked_list<T, A>::push(const T& element)
 {
-    queue_item_type* item = new queue_item_type{element};
+    // queue_item_type* item = new queue_item_type{element};
+    queue_item_type* item = alloc_traits::allocate(_allocator, 1);
+    alloc_traits::construct(_allocator, item, element);
     push(item);
 }
 
-template <class T>
-void concurrent_singly_linked_list<T>::push(queue_item_type* item)
+template <class T, class A>
+void concurrent_singly_linked_list<T, A>::push(queue_item_type* item)
 {
     auto temp = _head.load(memo::acquire);
     do {
@@ -155,21 +220,21 @@ void concurrent_singly_linked_list<T>::push(queue_item_type* item)
 
 
 
-template <class T>
-typename concurrent_singly_linked_list<T>::iterator_type
-concurrent_singly_linked_list<T>::find(const T& element)
+template <class T, class A>
+typename concurrent_singly_linked_list<T, A>::iterator_type
+concurrent_singly_linked_list<T, A>::find(const T& element)
 {
     return std::find(begin(), end(), element);
 }
 
-template <class T>
-bool concurrent_singly_linked_list<T>::contains(const T& element)
+template <class T, class A>
+bool concurrent_singly_linked_list<T, A>::contains(const T& element)
 {
     return find(element) != end();
 }
 
-template <class T>
-size_t concurrent_singly_linked_list<T>::size() const
+template <class T, class A>
+size_t concurrent_singly_linked_list<T, A>::size() const
 {
     auto result = 0;
     for ([[maybe_unused]] const auto& e : *this) { ++result; }
@@ -179,44 +244,44 @@ size_t concurrent_singly_linked_list<T>::size() const
 
 
 // ITERATOR STUFF
-template <class T>
-typename concurrent_singly_linked_list<T>::iterator_type
-concurrent_singly_linked_list<T>::begin()
+template <class T, class A>
+typename concurrent_singly_linked_list<T, A>::iterator_type
+concurrent_singly_linked_list<T, A>::begin()
 {
     return iterator_type(_head.load(memo::acquire));
 }
 
-template <class T>
-typename concurrent_singly_linked_list<T>::const_iterator_type
-concurrent_singly_linked_list<T>::begin() const
+template <class T, class A>
+typename concurrent_singly_linked_list<T, A>::const_iterator_type
+concurrent_singly_linked_list<T, A>::begin() const
 {
     return cbegin();
 }
 
-template <class T>
-typename concurrent_singly_linked_list<T>::const_iterator_type
-concurrent_singly_linked_list<T>::cbegin() const
+template <class T, class A>
+typename concurrent_singly_linked_list<T, A>::const_iterator_type
+concurrent_singly_linked_list<T, A>::cbegin() const
 {
     return const_iterator_type(_head.load(memo::acquire));
 }
 
-template <class T>
-typename concurrent_singly_linked_list<T>::iterator_type
-concurrent_singly_linked_list<T>::end()
+template <class T, class A>
+typename concurrent_singly_linked_list<T, A>::iterator_type
+concurrent_singly_linked_list<T, A>::end()
 {
     return iterator_type(nullptr);
 }
 
-template <class T>
-typename concurrent_singly_linked_list<T>::const_iterator_type
-concurrent_singly_linked_list<T>::end() const
+template <class T, class A>
+typename concurrent_singly_linked_list<T, A>::const_iterator_type
+concurrent_singly_linked_list<T, A>::end() const
 {
     return cend();
 }
 
-template <class T>
-typename concurrent_singly_linked_list<T>::const_iterator_type
-concurrent_singly_linked_list<T>::cend() const
+template <class T, class A>
+typename concurrent_singly_linked_list<T, A>::const_iterator_type
+concurrent_singly_linked_list<T, A>::cend() const
 {
     return const_iterator_type(nullptr);
 }
@@ -224,43 +289,44 @@ concurrent_singly_linked_list<T>::cend() const
 
 
 // ITERATOR IMPLEMENTATION
-template <class T>
+template <class T, class A>
 template <bool c>
-typename concurrent_singly_linked_list<T>::template iterator_base<c>::reference
-concurrent_singly_linked_list<T>::iterator_base<c>::operator*() const
+typename concurrent_singly_linked_list<T,
+                                       A>::template iterator_base<c>::reference
+concurrent_singly_linked_list<T, A>::iterator_base<c>::operator*() const
 {
     return _ptr->value;
 }
 
-template <class T>
+template <class T, class A>
 template <bool c>
-typename concurrent_singly_linked_list<T>::template iterator_base<c>::pointer
-concurrent_singly_linked_list<T>::iterator_base<c>::operator->() const
+typename concurrent_singly_linked_list<T, A>::template iterator_base<c>::pointer
+concurrent_singly_linked_list<T, A>::iterator_base<c>::operator->() const
 {
     return &(_ptr->value);
 }
 
-template <class T>
+template <class T, class A>
 template <bool c>
-typename concurrent_singly_linked_list<T>::template iterator_base<
+typename concurrent_singly_linked_list<T, A>::template iterator_base<
     c>::iterator_base&
-concurrent_singly_linked_list<T>::iterator_base<c>::operator++()
+concurrent_singly_linked_list<T, A>::iterator_base<c>::operator++()
 {
     _ptr = _ptr->next.load(memo::acquire);
     return *this;
 }
 
-template <class T>
+template <class T, class A>
 template <bool c>
-bool concurrent_singly_linked_list<T>::iterator_base<c>::operator==(
+bool concurrent_singly_linked_list<T, A>::iterator_base<c>::operator==(
     const iterator_base& other) const
 {
     return _ptr == other._ptr;
 }
 
-template <class T>
+template <class T, class A>
 template <bool c>
-bool concurrent_singly_linked_list<T>::iterator_base<c>::operator!=(
+bool concurrent_singly_linked_list<T, A>::iterator_base<c>::operator!=(
     const iterator_base& other) const
 {
     return _ptr != other._ptr;

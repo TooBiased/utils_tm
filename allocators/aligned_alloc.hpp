@@ -16,7 +16,7 @@ namespace allocators_tm
 {
 
 // the default alignment is two cache lines
-inline static constexpr size_t default_alignment = 128;
+static constexpr size_t default_alignment = 128;
 
 template <class T, size_t Alignment = default_alignment>
 class aligned_allocator

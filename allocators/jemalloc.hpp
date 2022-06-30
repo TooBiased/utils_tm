@@ -63,7 +63,7 @@ bool operator!=(const jeallocator<T>&, const jeallocator<U>&) noexcept
 
 
 // the default alignment is two cache lines
-inline static constexpr size_t je_default_alignment = 128;
+static constexpr size_t je_default_alignment = 128;
 
 template <class T, size_t Alignment = je_default_alignment>
 class aligned_jeallocator
