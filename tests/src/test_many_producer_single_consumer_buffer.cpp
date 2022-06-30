@@ -31,7 +31,7 @@ struct test<ttm::untimed_sub_thread>
                 }
                 npushed++;
             }
-            otm::out() << npushed << " elements pushed" << std::endl;
+            otm::buffered_out() << npushed << " elements pushed" << std::endl;
             return 0;
         });
 
@@ -60,7 +60,7 @@ struct test<ttm::timed_main_thread>
                     counter[popped.value()]++;
                 }
             }
-            otm::out() << npopped << " elements popped" << std::endl;
+            otm::buffered_out() << npopped << " elements popped" << std::endl;
             return 0;
         });
 
@@ -70,16 +70,16 @@ struct test<ttm::timed_main_thread>
             if (counter[i] != thrd.p - 1)
             {
                 noerror = false;
-                otm::out() << otm::color::red
-                           << "unexpected element count in element " << i
-                           << " count is " << counter[i] << otm::color::reset
-                           << std::endl;
+                otm::buffered_out()
+                    << otm::color::red << "unexpected element count in element "
+                    << i << " count is " << counter[i] << otm::color::reset
+                    << std::endl;
                 break;
             }
         }
         if (noerror)
-            otm::out() << otm::color::green + "test fully successful"
-                       << std::endl;
+            otm::buffered_out()
+                << otm::color::green + "test fully successful" << std::endl;
 
         return 0;
     }
