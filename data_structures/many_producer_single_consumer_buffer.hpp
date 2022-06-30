@@ -35,9 +35,10 @@ class many_producer_single_consumer_buffer
   public:
     using value_type = T;
 
-    many_producer_single_consumer_buffer(size_t         capacity,
-                                         allocator_type alloc = {});
-    many_producer_single_consumer_buffer(allocator_type alloc = {}) noexcept;
+    explicit many_producer_single_consumer_buffer(size_t         capacity,
+                                                  allocator_type alloc = {});
+    explicit many_producer_single_consumer_buffer(
+        allocator_type alloc = {}) noexcept;
 
     many_producer_single_consumer_buffer(
         const many_producer_single_consumer_buffer& other,

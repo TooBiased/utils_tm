@@ -31,8 +31,9 @@ class concurrent_circular_buffer
     alignas(64) std::atomic_size_t _pop_id;
 
   public:
-    concurrent_circular_buffer(size_t capacity, allocator_type alloc = {});
-    concurrent_circular_buffer(allocator_type alloc = {});
+    explicit concurrent_circular_buffer(size_t         capacity,
+                                        allocator_type alloc = {});
+    explicit concurrent_circular_buffer(allocator_type alloc = {});
     concurrent_circular_buffer(const concurrent_circular_buffer& other,
                                allocator_type                    alloc = {});
     concurrent_circular_buffer& operator=(const concurrent_circular_buffer&);

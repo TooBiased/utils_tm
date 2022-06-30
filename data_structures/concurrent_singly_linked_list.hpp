@@ -77,7 +77,7 @@ class concurrent_singly_linked_list
     std::atomic<queue_item_ptr>          _head;
 
   public:
-    concurrent_singly_linked_list(allocator_type alloc = {})
+    explicit concurrent_singly_linked_list(allocator_type alloc = {})
         : _allocator(alloc), _head(nullptr)
     {
     }

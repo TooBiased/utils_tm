@@ -63,9 +63,9 @@ bool operator!=(const jeallocator<T>&, const jeallocator<U>&) noexcept
 
 
 // the default alignment is two cache lines
-static constexpr size_t je_default_alignment = 128;
+static constexpr size_t aligned_jeallocator_default_alignment = 128;
 
-template <class T, size_t Alignment = je_default_alignment>
+template <class T, size_t Alignment = aligned_jeallocator_default_alignment>
 class aligned_jeallocator
 {
   private:
@@ -80,7 +80,7 @@ class aligned_jeallocator
     aligned_jeallocator(const aligned_jeallocator&) noexcept = default;
     ~aligned_jeallocator()                                   = default;
 
-    template <class U, size_t Ua = je_default_alignment>
+    template <class U, size_t Ua = aligned_jeallocator_default_alignment>
     aligned_jeallocator(const aligned_jeallocator<U, Ua>&) noexcept
     {
     }

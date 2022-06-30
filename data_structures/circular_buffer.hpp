@@ -30,8 +30,8 @@ class circular_buffer
     T*                                   _buffer;
 
   public:
-    circular_buffer(size_t capacity, allocator_type alloc = {});
-    circular_buffer(allocator_type alloc = {});
+    explicit circular_buffer(size_t capacity, allocator_type alloc = {});
+    explicit circular_buffer(allocator_type alloc = {});
     circular_buffer(const circular_buffer& other, allocator_type alloc = {});
     circular_buffer& operator=(const circular_buffer&);
     circular_buffer(circular_buffer&& other) noexcept;
