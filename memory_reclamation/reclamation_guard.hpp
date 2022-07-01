@@ -5,7 +5,6 @@
 
 namespace utils_tm
 {
-template <class V, template <class> class R> class protected_singly_linked_list;
 
 namespace reclamation_tm
 {
@@ -18,7 +17,8 @@ template <class GuardType>
 GuardType add_guard(const GuardType&                               guard,
                     const typename GuardType::atomic_pointer_type& aptr);
 
-template <class T, class ReclamationType> class reclamation_guard
+template <class T, class ReclamationType>
+class reclamation_guard
 {
   private:
     using this_type        = reclamation_guard<T, ReclamationType>;
@@ -57,10 +57,6 @@ template <class T, class ReclamationType> class reclamation_guard
   private:
     reclamation_type& _rec_handle;
     T*                _ptr;
-
-    // template <class V, template <class> class R, bool c>
-    // friend class protected_singly_linked_list<V,R>::template
-    // iterator_base<c>::this_type;
 };
 
 template <class T, class R>
@@ -121,12 +117,14 @@ reclamation_guard<T, R>::operator=(reclamation_guard&& source)
     return *this;
 }
 
-template <class T, class R> reclamation_guard<T, R>::~reclamation_guard()
+template <class T, class R>
+reclamation_guard<T, R>::~reclamation_guard()
 {
     if (mark::clear(_ptr)) _rec_handle.unprotect(_ptr);
 }
 
-template <class T, class R> T* reclamation_guard<T, R>::release()
+template <class T, class R>
+T* reclamation_guard<T, R>::release()
 {
     auto temp = _ptr;
     if (mark::clear(_ptr)) _rec_handle.unprotect(_ptr);
@@ -134,7 +132,8 @@ template <class T, class R> T* reclamation_guard<T, R>::release()
     return temp;
 }
 
-template <class T, class R> bool reclamation_guard<T, R>::unmark()
+template <class T, class R>
+bool reclamation_guard<T, R>::unmark()
 {
     bool was_marked = (_ptr != mark::clear(_ptr));
     _ptr            = mark::clear(_ptr);
