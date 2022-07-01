@@ -2,6 +2,7 @@
 
 #include <atomic>
 #include <iterator>
+#include <memory>
 
 #include "../concurrency/memory_order.hpp"
 
@@ -66,15 +67,19 @@ class concurrent_singly_linked_list
     using pointer_type        = T*;
     using iterator_type       = iterator_base<false>;
     using const_iterator_type = iterator_base<true>;
-    using allocator_type      = typename std::allocator_traits<
+    using allocator_type =
+        typename std::allocator_traits<Allocator>::rebind_alloc<T>;
+
+
+  private:
+    using internal_allocator_type = typename std::allocator_traits<
         Allocator>::rebind_alloc<queue_item_type>;
     using alloc_traits = std::allocator_traits<allocator_type>;
 
-  private:
     using queue_item_ptr = queue_item_type*;
 
-    [[no_unique_address]] allocator_type _allocator;
-    std::atomic<queue_item_ptr>          _head;
+    [[no_unique_address]] internal_allocator_type _allocator;
+    std::atomic<queue_item_ptr>                   _head;
 
   public:
     explicit concurrent_singly_linked_list(allocator_type alloc = {})

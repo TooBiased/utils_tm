@@ -19,28 +19,27 @@ namespace reclamation_tm
 template <class T, class D = default_destructor<T>, class A = std::allocator<T>>
 class delayed_manager
 {
-  private:
+  public:
     using this_type       = delayed_manager<T, D, A>;
     using memo            = concurrency_tm::standard_memory_order_policy;
     using destructor_type = D;
     using allocator_type  = typename std::allocator_traits<A>::rebind_alloc<T>;
     using alloc_traits    = std::allocator_traits<allocator_type>;
-
-  public:
-    using pointer_type        = T*;
+    using pointer_type    = T*;
     using atomic_pointer_type = std::atomic<T*>;
     using protected_type      = T;
 
-    template <class lT = T, class lA = A>
+    template <class lT = T, class lD = default_destructor<T>, class lA = A>
     struct rebind
     {
         using other = delayed_manager<lT, lA>;
     };
 
     delayed_manager(const allocator_type& alloc = A()) : _allocator(alloc) {}
-    delayed_manager(const delayed_manager&)             = delete;
-    delayed_manager& operator=(const delayed_manager&)  = delete;
-    delayed_manager(delayed_manager&& other)            = default;
+    delayed_manager(const delayed_manager&)            = delete;
+    delayed_manager& operator=(const delayed_manager&) = delete;
+    delayed_manager(delayed_manager&& other)           = default;
+    delayed_manager(delayed_manager&& other, allocator_type alloc);
     delayed_manager& operator=(delayed_manager&& other) = default;
     ~delayed_manager()                                  = default;
 
@@ -99,6 +98,15 @@ class delayed_manager
 };
 
 
+
+
+
+template <class T, class D, class A>
+delayed_manager<T, D, A>::delayed_manager(delayed_manager&& other,
+                                          allocator_type    alloc)
+    : _destructor(std::move(other._destructor)), _allocator(alloc)
+{
+}
 
 
 

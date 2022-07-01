@@ -28,16 +28,14 @@ template <class T,
           size_t maxProtections = 256>
 class hazard_manager
 {
-  private:
+  public:
     using this_type =
         hazard_manager<T, Destructor, Allocator, maxThreads, maxProtections>;
     using memo            = concurrency_tm::standard_memory_order_policy;
     using destructor_type = Destructor;
     using allocator_type =
         typename std::allocator_traits<Allocator>::rebind_alloc<T>;
-    using alloc_traits = std::allocator_traits<Allocator>;
-
-  public:
+    using alloc_traits        = std::allocator_traits<Allocator>;
     using pointer_type        = T*;
     using atomic_pointer_type = std::atomic<T*>;
     using protected_type      = T;
@@ -52,8 +50,7 @@ class hazard_manager
         using other = hazard_manager<lT, lD, lA, lmT, lmP>;
     };
 
-    hazard_manager(destructor_type&&     destructor = destructor_type(),
-                   const allocator_type& alloc      = allocator_type())
+    hazard_manager(destructor_type&& destructor = {}, allocator_type alloc = {})
         : _destructor(std::move(destructor)), _allocator(alloc),
           _handle_counter(-1)
     {

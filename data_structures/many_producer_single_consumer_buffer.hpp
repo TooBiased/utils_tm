@@ -17,12 +17,14 @@ template <class T, class Allocator = std::allocator<T>, T dummy = T()>
 class many_producer_single_consumer_buffer
 {
   public:
-    using this_type = many_producer_single_consumer_buffer<T, Allocator>;
-    using memo      = concurrency_tm::standard_memory_order_policy;
+    using this_type  = many_producer_single_consumer_buffer<T, Allocator>;
+    using memo       = concurrency_tm::standard_memory_order_policy;
+    using value_type = std::atomic<T>;
     using allocator_type =
         typename std::allocator_traits<Allocator>::rebind_alloc<std::atomic<T>>;
     using alloc_traits = std::allocator_traits<allocator_type>;
 
+  private:
     static constexpr T                   _dummy            = dummy;
     static constexpr size_t              _scnd_buffer_flag = 1ull << 63;
     [[no_unique_address]] allocator_type _allocator;
@@ -33,8 +35,6 @@ class many_producer_single_consumer_buffer
     std::atomic<T>*                      _buffer;
 
   public:
-    using value_type = T;
-
     explicit many_producer_single_consumer_buffer(size_t         capacity,
                                                   allocator_type alloc = {});
     explicit many_producer_single_consumer_buffer(

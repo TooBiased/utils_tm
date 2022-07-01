@@ -16,73 +16,26 @@ namespace utils_tm
 namespace reclamation_tm
 {
 
-// template <class T>
-// class stub_atomic_pointer
-// {
-// private:
-//     T* _ptr;
-// public:
-//     stub_atomic_pointer(T* ptr) : _ptr(ptr) { }
-
-//     stub_atomic_pointer& operator=(T* ptr)
-//     {
-//         _ptr = ptr;
-//         return *this;
-//     }
-
-//     T* load() const
-//     {
-//         return _ptr;
-//     }
-
-//     void store(T* ptr)
-//     {
-//         this->_ptr = ptr;
-//     }
-
-//     T* exchange(T* ptr)
-//     {
-//         auto result = _ptr;
-//         _ptr = ptr;
-//         return result;
-//     }
-
-//     bool compare_exchange_strong(T*& expected, T* target)
-//     {
-//         if (_ptr == expected)
-//         { _ptr = target;   return true; }
-//         else
-//         { expected = _ptr; return false; }
-//     }
-
-//     operator T*() const { return _ptr; }
-
-// };
-
-
-
 template <class T, class D = default_destructor<T>, class A = std::allocator<T>>
 class sequential_manager
 {
-  private:
+  public:
     using this_type       = sequential_manager<T, A>;
     using destructor_type = D;
     using allocator_type  = typename std::allocator_traits<A>::rebind_alloc<T>;
     using alloc_traits    = std::allocator_traits<allocator_type>;
-
-  public:
-    using pointer_type        = T*;
+    using pointer_type    = T*;
     using atomic_pointer_type = std::atomic<T*>;
     using protected_type      = T;
 
-    template <class lT = T, class lA = A>
+    template <class lT = T, class lD = default_destructor<T>, class lA = A>
     struct rebind
     {
         using other = sequential_manager<lT, A>;
     };
 
-    sequential_manager(destructor_type&&     destructor = destructor_type(),
-                       const allocator_type& alloc      = allocator_type())
+    sequential_manager(destructor_type&& destructor = {},
+                       allocator_type    alloc      = {})
         : _destructor(std::move(destructor)), _allocator(alloc)
     {
     }

@@ -54,15 +54,14 @@ class counting_manager
         static constexpr uint del_flag = 1 << 31;
     };
 
+  public:
     using this_type       = counting_manager<T, Destructor, Allocator, Queue>;
     using destructor_type = Destructor;
     using internal_type   = _counted_object;
     using allocator_type =
         typename std::allocator_traits<Allocator>::rebind_alloc<internal_type>;
-    using alloc_traits = std::allocator_traits<allocator_type>;
-    using queue_type   = Queue<internal_type*>;
-
-  public:
+    using alloc_traits        = std::allocator_traits<allocator_type>;
+    using queue_type          = Queue<internal_type*>;
     using pointer_type        = T*;
     using atomic_pointer_type = std::atomic<T*>;
     using protected_type      = internal_type;
@@ -78,14 +77,14 @@ class counting_manager
 
 
 
-    counting_manager(destructor_type&&     destructor = destructor_type(),
-                     const allocator_type& alloc      = allocator_type())
+    counting_manager(destructor_type&& destructor = {},
+                     allocator_type    alloc      = {})
         : _destructor(std::move(destructor)), _allocator(alloc)
     {
     }
     counting_manager(const counting_manager&)            = delete;
     counting_manager& operator=(const counting_manager&) = delete;
-    counting_manager(counting_manager&& other);
+    counting_manager(counting_manager&& other, allocator_type alloc = {});
     counting_manager& operator=(counting_manager&& other);
     ~counting_manager();
 
@@ -136,8 +135,9 @@ class counting_manager
         inline void           internal_delete(internal_type* iptr);
     };
 
-    handle_type get_handle() { return handle_type(*this); }
-    void        delete_raw(pointer_type ptr);
+    handle_type    get_handle() { return handle_type(*this); }
+    void           delete_raw(pointer_type ptr);
+    allocator_type get_allocator() const { return _allocator; }
 
   private:
     [[no_unique_address]] destructor_type _destructor;
@@ -148,8 +148,9 @@ class counting_manager
 
 
 template <class T, class D, class A, template <class> class Q>
-counting_manager<T, D, A, Q>::counting_manager(counting_manager&& other)
-    : _destructor(std::move(other._destructor)), _allocator(other._allocator),
+counting_manager<T, D, A, Q>::counting_manager(counting_manager&& other,
+                                               allocator_type     alloc)
+    : _destructor(std::move(other._destructor)), _allocator(alloc),
       _freelist_mutex(), _freelist()
 {
     std::lock_guard<std::mutex> guard(other._freelist_mutex);

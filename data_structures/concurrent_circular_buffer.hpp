@@ -17,7 +17,7 @@ class concurrent_circular_buffer
   public:
     using this_type  = concurrent_circular_buffer<T, Allocator, dummy>;
     using memo       = concurrency_tm::standard_memory_order_policy;
-    using value_type = T;
+    using value_type = std::atomic<T>;
     using allocator_type =
         typename std::allocator_traits<Allocator>::rebind_alloc<std::atomic<T>>;
     using alloc_traits = std::allocator_traits<allocator_type>;
