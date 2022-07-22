@@ -56,8 +56,11 @@ inline void if_debug(std::string&& str, [[maybe_unused]] bool condition = true)
 {
     if constexpr (debug_mode)
     {
-        str.append("\n");
-        if (condition) { dout() << out_tm::color::yellow + str << std::flush; }
+        if (condition)
+        {
+            str.append("\n");
+            dout() << out_tm::color::yellow + str << std::flush;
+        }
     }
 }
 
