@@ -83,8 +83,16 @@ concurrent_circular_buffer<T, A, d>::concurrent_circular_buffer(
 template <class T, class A, T d>
 concurrent_circular_buffer<T, A, d>::concurrent_circular_buffer(
     allocator_type alloc)
-    : _allocator(alloc), _bitmask(0), _buffer(nullptr), _push_id(0), _pop_id(0)
+    : _allocator(alloc), _push_id(0), _pop_id(0)
 {
+    size_t default_size = 64; // must be power of 2
+    _bitmask            = default_size - 1;
+    _buffer             = alloc_traits::allocate(_allocator, default_size);
+    using pointer       = typename alloc_traits::pointer;
+    for (pointer ptr = _buffer; ptr < _buffer + default_size; ++ptr)
+    {
+        alloc_traits::construct(_allocator, ptr, _dummy);
+    }
 }
 
 template <class T, class A, T d>

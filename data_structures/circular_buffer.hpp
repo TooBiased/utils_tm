@@ -142,7 +142,7 @@ template <class T, class A>
 circular_buffer<T, A>::circular_buffer(allocator_type alloc)
     : _allocator(alloc), _start(0), _end(0)
 {
-    size_t default_size = 32;
+    size_t default_size = 32; // must be power of 2
     _buffer             = alloc_traits::allocate(_allocator, default_size);
     _bitmask            = default_size - 1;
 }

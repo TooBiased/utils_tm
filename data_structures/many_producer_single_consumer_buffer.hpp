@@ -85,12 +85,10 @@ many_producer_single_consumer_buffer<T, A, d>::
     : _allocator(alloc), _capacity(capacity), _pos(0), _read_pos(0),
       _read_end(0)
 {
-    // _buffer = new std::atomic<T>[2 * capacity];
     _buffer = alloc_traits::allocate(_allocator, 2 * capacity);
 
     for (auto ptr = _buffer; ptr < _buffer + (2 * capacity); ++ptr)
     {
-        // _buffer[i].store(_dummy, memo::relaxed);
         alloc_traits::construct(_allocator, ptr, _dummy);
     }
 }
@@ -98,9 +96,16 @@ many_producer_single_consumer_buffer<T, A, d>::
 template <class T, class A, T d>
 many_producer_single_consumer_buffer<T, A, d>::
     many_producer_single_consumer_buffer(allocator_type alloc) noexcept
-    : _allocator(alloc), _capacity(0), _pos(0), _read_pos(0), _read_end(0),
-      _buffer(nullptr)
+    : _allocator(alloc), _pos(0), _read_pos(0), _read_end(0)
 {
+    constexpr size_t default_capacity = 64;
+    _capacity                         = default_capacity;
+
+    _buffer = alloc_traits::allocate(_allocator, 2 * default_capacity);
+    for (auto ptr = _buffer; ptr < _buffer + (2 * default_capacity); ++ptr)
+    {
+        alloc_traits::construct(_allocator, ptr, _dummy);
+    }
 }
 
 
