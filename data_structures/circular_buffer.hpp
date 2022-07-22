@@ -130,7 +130,7 @@ template <class T, class A>
 circular_buffer<T, A>::circular_buffer(size_t capacity, allocator_type alloc)
     : _allocator(alloc), _start(0), _end(0)
 {
-    size_t tcap = 1;
+    size_t tcap = 32;
     while (tcap < capacity) tcap <<= 1;
 
     //_buffer  = static_cast<T*>(malloc(sizeof(T) * tcap));
@@ -140,8 +140,11 @@ circular_buffer<T, A>::circular_buffer(size_t capacity, allocator_type alloc)
 
 template <class T, class A>
 circular_buffer<T, A>::circular_buffer(allocator_type alloc)
-    : _allocator(alloc), _start(0), _end(0), _bitmask(0), _buffer(nullptr)
+    : _allocator(alloc), _start(0), _end(0)
 {
+    size_t default_size = 32;
+    _buffer             = alloc_traits::allocate(_allocator, default_size);
+    _bitmask            = default_size - 1;
 }
 
 template <class T, class A>
