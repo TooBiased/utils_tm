@@ -118,5 +118,13 @@ inline constexpr bool is_marked(T* ptr)
     return bool(size_t(ptr) & (~lower<15>()));
 }
 
+template <class T = void>
+inline constexpr uint16_t get_all_marks(T* ptr)
+{
+    return uint16_t(size_t(ptr) >> 48);
+}
+
+
+
 } // namespace mark
 } // namespace utils_tm
