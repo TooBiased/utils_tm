@@ -124,6 +124,12 @@ inline constexpr uint16_t get_all_marks(T* ptr)
     return uint16_t(size_t(ptr) >> 48);
 }
 
+template <class T = void>
+inline constexpr T* set_all_marks(T* ptr, uint16_t marks)
+{
+    return (T*)(size_t(ptr) | (size_t(marks) << 48));
+}
+
 
 
 } // namespace mark
