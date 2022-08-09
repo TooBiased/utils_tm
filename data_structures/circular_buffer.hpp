@@ -128,7 +128,7 @@ class circular_buffer
 // CTORS AND DTOR !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 template <class T, class A>
 circular_buffer<T, A>::circular_buffer(size_t capacity, allocator_type alloc)
-    : _allocator(alloc), _start(0), _end(0)
+    : _allocator(alloc), _start(1ull << 31), _end(1ull << 31)
 {
     size_t tcap = 32;
     while (tcap < capacity) tcap <<= 1;
@@ -140,7 +140,7 @@ circular_buffer<T, A>::circular_buffer(size_t capacity, allocator_type alloc)
 
 template <class T, class A>
 circular_buffer<T, A>::circular_buffer(allocator_type alloc)
-    : _allocator(alloc), _start(0), _end(0)
+    : _allocator(alloc), _start(1ull << 31), _end(1ull << 31)
 {
     size_t default_size = 32; // must be power of 2
     _buffer             = alloc_traits::allocate(_allocator, default_size);

@@ -33,8 +33,8 @@ class reclamation_guard
                              const atomic_pointer_type& aptr);
     inline reclamation_guard(reclamation_type& rec, pointer_type ptr);
 
-    inline reclamation_guard(const reclamation_guard&);
-    inline reclamation_guard& operator=(const reclamation_guard&);
+    inline reclamation_guard(const reclamation_guard&)            = delete;
+    inline reclamation_guard& operator=(const reclamation_guard&) = delete;
 
     inline reclamation_guard(reclamation_guard&& source);
     inline reclamation_guard& operator=(reclamation_guard&& source);
@@ -82,22 +82,22 @@ reclamation_guard<T, R>::reclamation_guard(reclamation_type& rec,
     _rec_handle.protect_raw(ptr);
 }
 
-template <class T, class R>
-reclamation_guard<T, R>::reclamation_guard(const reclamation_guard& source)
-    : _rec_handle(source._rec_handle), _ptr(source._ptr)
-{
-    _rec_handle.protect_raw(_ptr);
-}
+// template <class T, class R>
+// reclamation_guard<T, R>::reclamation_guard(const reclamation_guard& source)
+//     : _rec_handle(source._rec_handle), _ptr(source._ptr)
+// {
+//     _rec_handle.protect_raw(_ptr);
+// }
 
-template <class T, class R>
-reclamation_guard<T, R>&
-reclamation_guard<T, R>::operator=(const reclamation_guard& source)
-{
-    if (&source == this) return *this;
-    this->~reclamation_guard();
-    new (this) reclamation_guard(source);
-    return *this;
-}
+// template <class T, class R>
+// reclamation_guard<T, R>&
+// reclamation_guard<T, R>::operator=(const reclamation_guard& source)
+// {
+//     if (&source == this) return *this;
+//     this->~reclamation_guard();
+//     new (this) reclamation_guard(source);
+//     return *this;
+// }
 
 
 template <class T, class R>
